@@ -1,5 +1,6 @@
 # node-drainer
 
+[![Build Status](https://travis-ci.org/rebuy-de/node-drainer.svg?branch=master)](https://travis-ci.org/rebuy-de/node-drainer)
 [![license](https://img.shields.io/github/license/rebuy-de/node-drainer.svg)]()
 
 Utilise the power of AWS Auto Scaling group (ASG) lifecycle hooks and drain your Kubernetes nodes gracefully.

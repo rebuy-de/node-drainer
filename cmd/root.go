@@ -89,7 +89,7 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 		"Log level. Defults to info.")
 
 	cmd.PersistentFlags().StringVarP(
-		&nd.QueueURL, "queue-url", "q", "",
+		&nd.QueueURL, "queue-name", "q", "",
 		"The name of the sqs Queue, used to generate the queue address. This argument is mandatory.")
 
 	cmd.PersistentFlags().StringVarP(
@@ -108,7 +108,7 @@ func NewRootCommand() *cobra.Command {
 
 	cmd.Use = "node-drainer"
 	cmd.Short = "Node drainer utility."
-	cmd.Long = `Drains selected kubernetes nodes by applying a NoExecute taint.` +
+	cmd.Long = `Drains selected kubernetes nodes while applying a NoSchedule taint. ` +
 		`Nodes to be drained are selected by receiving AWS ASG lifecycle hook triggers over sqs.`
 
 	return cmd

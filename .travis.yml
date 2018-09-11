@@ -6,7 +6,7 @@ services:
   - docker
 
 script:
-- docker build -t node-drainer --no-cache .
+- docker build -t node-drainer --target builder --no-cache .
 - >
   docker run
   --name node-drainer

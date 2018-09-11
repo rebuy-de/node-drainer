@@ -1,5 +1,7 @@
 # node-drainer
 
+[![license](https://img.shields.io/github/license/rebuy-de/node-drainer.svg)]()
+
 Utilise the power of AWS Auto Scaling group (ASG) lifecycle hooks and drain your Kubernetes nodes gracefully.
 **node-drainer** reads AWS ASG lifecycle hook messages from an SQS queue.
 For each item received it contacts Kubernetes, taints the node to be shut down and evicts any pods not tolerant to the taint.

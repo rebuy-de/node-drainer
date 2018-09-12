@@ -1,0 +1,48 @@
+# Example K8S Deployment manifest file, read before applying
+apiVersion: extensions/v1beta1
+kind: Deployment
+
+metadata:
+  name: node-drainer
+  labels:
+    app: node-drainer
+
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+
+  # You should always have one replica only,
+  # node-drainer was not designed to run concurrently
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+
+  template:
+    metadata:
+      name: node-drainer
+      labels:
+        app: node-drainer
+
+    spec:
+      # The service account is necessary if your K8S cluster is running RBAC,
+      # otherwise the following line should be deleted
+      serviceAccountName: node-drainer
+
+      containers:
+      - name: node-drainer
+        image: "quay.io/rebuy/node-drainer:master"
+        imagePullPolicy: Always
+        # These are sample arguments, configure before applying the manifest
+        args:
+        - -q=asg-shutdown-queue
+        - -r=eu-west-1
+        - --access-key-id=FILL-ME-IN
+        - --secret-access-key=FILL-ME-IN
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi

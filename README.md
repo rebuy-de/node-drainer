@@ -40,7 +40,9 @@ node-drainer --access-key-id example_id --secret-access-key example_secret --reg
 
 ## Installation
 
-Binaries and packages are not provided for *node-drainer*. To have it installed one must compile it from source.
+* Binaries for *node-drainer* are provided for each release [here](https://github.com/rebuy-de/node-drainer/releases).
+* Docker containers are are provided [here](https://quay.io/repository/rebuy/node-drainer). To obtain the latest docker image run `docker pull quay.io/rebuy/node-drainer:master`.
+* For deploying *node-drainer* docker image to your Kubernetes cluster you can use the sample manifest files (found [here](https://github.com/rebuy-de/node-drainer/tree/master/samples)), just remember to fill in your own AWS credentials. I you use RBAC in Kubernetes you can also take advantage of the sample service account configuration.
 
 To compile *node-drainer* from source you need a working
 [Golang](https://golang.org/doc/install) development environment. The sources

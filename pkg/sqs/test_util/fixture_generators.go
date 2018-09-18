@@ -9,8 +9,6 @@ import (
 	"github.com/rebuy-de/node-drainer/pkg/util"
 )
 
-//TODO: anonymise
-
 func GenerateDescribeInstancesOutput(empty bool) *ec2.DescribeInstancesOutput {
 	output := &ec2.DescribeInstancesOutput{}
 	reservation := &ec2.Reservation{}

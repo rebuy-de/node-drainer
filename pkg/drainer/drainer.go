@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/rebuy-de/node-drainer/pkg/prom"
 	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -51,6 +52,8 @@ func (d *Drainer) Drain(nodeName string) error {
 
 	log.Info("draining: ", n.GetName())
 
+	start := time.Now()
+
 	if !d.hasShutdownTaint(n.Spec.Taints) {
 		n.Spec.Taints = append(n.Spec.Taints, *d.TaintShutdown)
 		_, err := d.Clientset.Core().Nodes().Update(n)
@@ -67,6 +70,8 @@ func (d *Drainer) Drain(nodeName string) error {
 		time.Sleep(time.Duration(1) * time.Second)
 	}
 	log.Info("finished draining: ", n.GetName())
+
+	prom.M.SetLastEvictionDuration(time.Since(start).Seconds())
 	return nil
 }
 
@@ -127,6 +132,7 @@ func (d *Drainer) evictAllPods(node *v1.Node) {
 			}
 			go d.evict(eviction)
 			evictions = evictions + 1
+			prom.M.IncreaseEvictedPods()
 		}
 	}
 

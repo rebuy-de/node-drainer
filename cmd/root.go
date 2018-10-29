@@ -5,6 +5,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	awssqs "github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/rebuy-de/node-drainer/pkg/drainer"
+	"github.com/rebuy-de/node-drainer/pkg/prom"
 	"github.com/rebuy-de/node-drainer/pkg/sqs"
 	"github.com/rebuy-de/node-drainer/pkg/util"
 	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
@@ -13,12 +14,13 @@ import (
 )
 
 type NodeDrainer struct {
-	Kubeconfig string
-	Profile    *util.AWSProfile
-	LogLevel   string
-	QueueURL   string
-	AWSRegion  string
-	SQSWait    int
+	Kubeconfig  string
+	Profile     *util.AWSProfile
+	LogLevel    string
+	QueueURL    string
+	AWSRegion   string
+	SQSWait     int
+	MetricsPort string
 }
 
 func (nd *NodeDrainer) Run(cmd *cobra.Command, args []string) {
@@ -26,6 +28,8 @@ func (nd *NodeDrainer) Run(cmd *cobra.Command, args []string) {
 		log.Error("incorrect AWS credentials, exiting...")
 		cmdutil.Exit(1)
 	}
+
+	prom.Run(nd.MetricsPort)
 
 	logLevel, err := log.ParseLevel(nd.LogLevel)
 	if err != nil {
@@ -99,6 +103,10 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVarP(
 		&nd.SQSWait, "sqs-wait-interval", "w", 10,
 		"Time to wait between successive SQS polling calls, values must be between 0 and 20 (seconds).")
+
+	cmd.PersistentFlags().StringVarP(
+		&nd.MetricsPort, "metrics-port", "m", "8080",
+		"Port on which prometheus `/metrics` will be exposed.")
 }
 
 func NewRootCommand() *cobra.Command {

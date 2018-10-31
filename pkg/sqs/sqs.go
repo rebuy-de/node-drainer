@@ -96,6 +96,8 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 		var message util.Message
 		err := json.Unmarshal([]byte(*msg.Messages[m].Body), &message)
 
+		log.Debugf("Message body: ", message)
+
 		messageHandle := msg.Messages[m].ReceiptHandle
 
 		if err != nil {

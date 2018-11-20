@@ -54,7 +54,7 @@ func (nd *NodeDrainer) Run(cmd *cobra.Command, args []string) {
 	svcAutoscaling := autoscaling.New(session)
 	svcSqs := awssqs.New(session)
 	svcEc2 := ec2.New(session)
-	queueUrl := util.GetQueueURL(session, url, nd.AWSRegion)
+	queueUrl := util.GetQueueURL(session, url, nd.AWSRegion, nd.Profile)
 	sqs := sqs.NewMessageHandler(drainer, &queueUrl, nd.SQSWait, svcAutoscaling, svcSqs, svcEc2)
 	sqs.Run()
 }

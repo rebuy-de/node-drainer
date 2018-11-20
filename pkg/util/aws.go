@@ -50,7 +50,7 @@ func (c *AWSProfile) BuildSession(region string) *session.Session {
 }
 
 func (c *AWSProfile) IsValid() bool {
-	if !c.Shared() && !c.Static() {
+	if !c.Shared() && !c.Static() && !c.EC2RoleProvider {
 		return false
 	}
 	return true

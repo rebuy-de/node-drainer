@@ -67,26 +67,32 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(
 		&nd.Profile.Profile, "profile", "p", "",
 		"Name of the AWS profile name for accessing the AWS API. "+
-			"Cannot be used together with --access-key-id, --secret-access-key "+
-			"and --session-token.")
+			"Cannot be used together with --access-key-id, --secret-access-key, "+
+			"--ec2-role-provider and --session-token.")
 
 	cmd.PersistentFlags().StringVar(
 		&nd.Profile.AccessKeyID, "access-key-id", "",
 		"AWS access key ID for accessing the AWS API. "+
 			"Must be used together with --secret-access-key."+
-			"Cannot be used together with --profile.")
+			"Cannot be used together with --profile or --ec2-role-provider.")
 
 	cmd.PersistentFlags().StringVar(
 		&nd.Profile.SecretAccessKey, "secret-access-key", "",
 		"AWS secret access key for accessing the AWS API. "+
 			"Must be used together with --access-key-id."+
-			"Cannot be used together with --profile.")
+			"Cannot be used together with --profile or --ec2-role-provider.")
 
 	cmd.PersistentFlags().StringVar(
 		&nd.Profile.SessionToken, "session-token", "",
 		"AWS session token for accessing the AWS API. "+
 			"Must be used together with --access-key-id and --secret-access-key."+
-			"Cannot be used together with --profile.")
+			"Cannot be used together with --profile or --ec2-role-provider.")
+
+	cmd.PersistentFlags().BoolVar(
+		&nd.Profile.EC2RoleProvider, "ec2-role-provider", false,
+		"AWS session via EC2 Roles. "+
+			"Cannot be used together with --access-key-id, --secret-access-key, --profile "+
+			"and --session-token.")
 
 	cmd.PersistentFlags().StringVarP(
 		&nd.LogLevel, "log-level", "l", "info",

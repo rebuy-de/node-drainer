@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/client"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
@@ -16,6 +17,7 @@ type AWSProfile struct {
 	Profile         string
 	AccessKeyID     string
 	SecretAccessKey string
+	EC2RoleProvider bool
 	SessionToken    string
 }
 
@@ -75,7 +77,11 @@ func AttachAWSCredentials(cfg *aws.Config, profile *AWSProfile) error {
 	} else if profile.Shared() {
 		cfg.WithCredentials(credentials.NewSharedCredentials("", profile.Profile))
 		return nil
+	} else if profile.EC2RoleProvider {
+		cfg.WithCredentials(credentials.NewCredentials(&ec2rolecreds.EC2RoleProvider{}))
+		return nil
 	}
+
 	return errors.New("No valid AWS credentials found.")
 }
 

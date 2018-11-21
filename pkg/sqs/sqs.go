@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/signal"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -29,6 +30,7 @@ type MessageHandler struct {
 	SvcAutoscaling autoscalingiface.AutoScalingAPI
 	SvcSQS         sqsiface.SQSAPI
 	SvcEC2         ec2iface.EC2API
+	CoolDown       int
 }
 
 type Message struct {
@@ -43,7 +45,7 @@ type Message struct {
 	LifecycleActionToken *string
 }
 
-func NewMessageHandler(drainer Trigger, drainQueue *string, timeout int, svcAutoscaling autoscalingiface.AutoScalingAPI, svcSQS sqsiface.SQSAPI, svcEC2 ec2iface.EC2API) *MessageHandler {
+func NewMessageHandler(drainer Trigger, drainQueue *string, timeout int, svcAutoscaling autoscalingiface.AutoScalingAPI, svcSQS sqsiface.SQSAPI, svcEC2 ec2iface.EC2API, coolDown int) *MessageHandler {
 	return &MessageHandler{
 		Drainer:        drainer,
 		DrainQueue:     drainQueue,
@@ -51,6 +53,7 @@ func NewMessageHandler(drainer Trigger, drainQueue *string, timeout int, svcAuto
 		SvcAutoscaling: svcAutoscaling,
 		SvcSQS:         svcSQS,
 		SvcEC2:         svcEC2,
+		CoolDown:       coolDown,
 	}
 }
 
@@ -117,6 +120,9 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 		mh.triggerDrain(&message)
 		mh.deleteConsumedMessage(messageHandle)
 		mh.notifyASG(&message)
+
+		log.Infof("Cooling down %d seconds before moving on...", mh.CoolDown)
+		time.Sleep(time.Duration(mh.CoolDown) * time.Second)
 	}
 }
 

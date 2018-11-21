@@ -68,7 +68,7 @@ func TestHandleMessage(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			drainer, svcAutoscaling, svcSqs, svcEc2 := tu.GenerateMessageHandlerArgs()
-			mh := NewMessageHandler(drainer, aws.String("drainQueue"), 10, svcAutoscaling, svcSqs, svcEc2)
+			mh := NewMessageHandler(drainer, aws.String("drainQueue"), 10, svcAutoscaling, svcSqs, svcEc2, 0)
 			svcEc2.ReturnValue = tc.Ec2ReturnValue
 			mh.handleMessage(tc.message)
 			if svcEc2.WasDescribeInstancesCalled != tc.WantDescribeInstancesCalled {
@@ -98,7 +98,7 @@ func TestHandleMessage(t *testing.T) {
 func TestNotifyASG(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	autscalingSvc := tu.NewMockAutoScalingClient(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false))
+	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
 
 	cases := []struct {
 		name      string
@@ -132,7 +132,7 @@ func TestNotifyASG(t *testing.T) {
 func TestHeartbeat(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	autscalingSvc := tu.NewMockAutoScalingClient(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false))
+	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
 
 	cases := []struct {
 		name      string
@@ -166,7 +166,7 @@ func TestHeartbeat(t *testing.T) {
 func TestTriggerDrain(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	ec2Svc := tu.NewMockEC2Client(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc)
+	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc, 0)
 
 	cases := []struct {
 		name      string
@@ -200,7 +200,7 @@ func TestTriggerDrainCount(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	ec2Svc := tu.NewMockEC2Client(false)
 	md := tu.NewMockDrainer()
-	mh := NewMessageHandler(md, aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc)
+	mh := NewMessageHandler(md, aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc, 0)
 	cases := []struct {
 		name    string
 		ec2Conf *ec2.DescribeInstancesOutput
@@ -233,7 +233,7 @@ func TestTriggerDrainCount(t *testing.T) {
 func TestDeleteConsumedMessage(t *testing.T) {
 	if os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "crash" || os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "nocrash" {
 		sqsSvc := tu.NewMockSQSClient(false)
-		mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), sqsSvc, tu.NewMockEC2Client(false))
+		mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), sqsSvc, tu.NewMockEC2Client(false), 0)
 		if os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "crash" {
 			sqsSvc.ReturnError = true
 			mh.deleteConsumedMessage(aws.String(""))

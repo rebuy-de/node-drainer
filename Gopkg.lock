@@ -22,6 +22,7 @@
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
+    "aws/arn",
     "aws/awserr",
     "aws/awsutil",
     "aws/client",
@@ -350,14 +351,6 @@
   revision = "185b4288413d2a0dd0806f78c90dde719829e5ae"
 
 [[projects]]
-  digest = "1:84a00e3b48134c471c5b8491daaf3343492cbff40ce1bd21817c1686c990f8c3"
-  name = "github.com/rebuy-de/cost-exporter"
-  packages = ["pkg/prom"]
-  pruneopts = ""
-  revision = "a0f1f27b3d744185dcf6b5b7dfaffd7caf081e8f"
-  version = "0.1"
-
-[[projects]]
   digest = "1:13f72d28227aaed50d9a1226efbd52d478fc4cac213ed47b175ab469e11faf9b"
   name = "github.com/rebuy-de/rebuy-go-sdk"
   packages = ["cmdutil"]
@@ -649,8 +642,11 @@
   analyzer-version = 1
   input-imports = [
     "github.com/aws/aws-sdk-go/aws",
+    "github.com/aws/aws-sdk-go/aws/arn",
     "github.com/aws/aws-sdk-go/aws/client",
     "github.com/aws/aws-sdk-go/aws/credentials",
+    "github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds",
+    "github.com/aws/aws-sdk-go/aws/ec2metadata",
     "github.com/aws/aws-sdk-go/aws/session",
     "github.com/aws/aws-sdk-go/service/autoscaling",
     "github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface",
@@ -661,7 +657,6 @@
     "github.com/aws/aws-sdk-go/service/sts",
     "github.com/prometheus/client_golang/prometheus",
     "github.com/prometheus/client_golang/prometheus/promhttp",
-    "github.com/rebuy-de/cost-exporter/pkg/prom",
     "github.com/rebuy-de/rebuy-go-sdk/cmdutil",
     "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",

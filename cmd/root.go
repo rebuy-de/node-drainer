@@ -21,6 +21,7 @@ type NodeDrainer struct {
 	AWSRegion   string
 	SQSWait     int
 	MetricsPort string
+	CoolDown    int
 }
 
 func (nd *NodeDrainer) Run(cmd *cobra.Command, args []string) {
@@ -55,7 +56,7 @@ func (nd *NodeDrainer) Run(cmd *cobra.Command, args []string) {
 	svcSqs := awssqs.New(session)
 	svcEc2 := ec2.New(session)
 	queueUrl := util.GetQueueURL(session, url, nd.AWSRegion, nd.Profile)
-	sqs := sqs.NewMessageHandler(drainer, &queueUrl, nd.SQSWait, svcAutoscaling, svcSqs, svcEc2)
+	sqs := sqs.NewMessageHandler(drainer, &queueUrl, nd.SQSWait, svcAutoscaling, svcSqs, svcEc2, nd.CoolDown)
 	sqs.Run()
 }
 
@@ -113,6 +114,10 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(
 		&nd.MetricsPort, "metrics-port", "m", "8080",
 		"Port on which prometheus `/metrics` will be exposed.")
+
+	cmd.PersistentFlags().IntVarP(
+		&nd.CoolDown, "cool-down", "c", 300,
+		"Time in seconds node-drainer should sleep after draining a node before starting to handle the next one.")
 }
 
 func NewRootCommand() *cobra.Command {

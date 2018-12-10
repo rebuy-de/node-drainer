@@ -81,7 +81,7 @@ func NewMockEC2Client(returnError bool) *MockEC2Client {
 func (m *MockEC2Client) DescribeInstances(*ec2.DescribeInstancesInput) (*ec2.DescribeInstancesOutput, error) {
 	m.WasDescribeInstancesCalled = true
 	if m.ReturnError {
-		return &ec2.DescribeInstancesOutput{}, errors.New("DescribeInstances mock results in errorr")
+		return &ec2.DescribeInstancesOutput{}, errors.New("DescribeInstances mock results in error")
 	}
 	return m.ReturnValue, nil
 }

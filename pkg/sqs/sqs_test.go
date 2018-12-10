@@ -34,12 +34,22 @@ func TestHandleMessage(t *testing.T) {
 			Ec2ReturnValue:                    &ec2.DescribeInstancesOutput{},
 		},
 		{
-			name:                              "valid_message",
-			message:                           tu.GenerateValidMessage(t),
+			name:                              "valid_asg_message",
+			message:                           tu.GenerateValidASGMessage(t),
 			WantDescribeInstancesCalled:       true,
 			WantDeleteMessageCalled:           true,
 			WantCompleteLifecycleActionCalled: true,
 			WantHeartbeatCalled:               true,
+			WantDrainCalled:                   true,
+			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
+		},
+		{
+			name:                              "valid_spot_message",
+			message:                           tu.GenerateValidSpotMessage(t),
+			WantDescribeInstancesCalled:       true,
+			WantDeleteMessageCalled:           true,
+			WantCompleteLifecycleActionCalled: false,
+			WantHeartbeatCalled:               false,
 			WantDrainCalled:                   true,
 			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
 		},
@@ -188,7 +198,7 @@ func TestTriggerDrain(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ec2Svc.ReturnError = tc.callFails
-			mh.triggerDrain(&message)
+			mh.triggerDrain(message.EC2InstanceId)
 			have := ec2Svc.WasDescribeInstancesCalled
 			if have != tc.want {
 				t.Fail()
@@ -220,7 +230,7 @@ func TestTriggerDrainCount(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mh.triggerDrain(&message)
+			mh.triggerDrain(message.EC2InstanceId)
 			ec2Svc.ReturnValue = tc.ec2Conf
 			have := md.Names
 			if len(have) != len(tc.want) {

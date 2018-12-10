@@ -31,11 +31,21 @@ func GenerateSqsMessageHandle() string {
 	return "foobar"
 }
 
-func GenerateValidMessage(t *testing.T) *sqs.ReceiveMessageOutput {
+func GenerateValidASGMessage(t *testing.T) *sqs.ReceiveMessageOutput {
 	output := sqs.ReceiveMessageOutput{}
 	msg := sqs.Message{}
 	msgList := []*sqs.Message{&msg}
 	msg.SetBody("{\"LifecycleHookName\":\"lifecycle-hook-name\",\"AccountId\":\"000000000000\",\"RequestId\":\"00000000-0000-0000-0000-00000000000000\",\"LifecycleTransition\":\"autoscaling:EC2_INSTANCE_TERMINATING\",\"AutoScalingGroupName\":\"autoscaling-group-name\",\"Service\":\"AWS Auto Scaling\",\"Time\":\"2000-01-01T00:00:00.000Z\",\"EC2InstanceId\":\"i-00000000000000000\",\"LifecycleActionToken\":\"00000000-0000-0000-0000-00000000000000\"}")
+	msg.SetReceiptHandle(GenerateSqsMessageHandle())
+	output.SetMessages(msgList)
+	return &output
+}
+
+func GenerateValidSpotMessage(t *testing.T) *sqs.ReceiveMessageOutput {
+	output := sqs.ReceiveMessageOutput{}
+	msg := sqs.Message{}
+	msgList := []*sqs.Message{&msg}
+	msg.SetBody("{\"version\":\"0\",\"id\":\"00000000-0000-0000-0000-000000000000\",\"detail-type\":\"EC2 Spot Instance Interruption Warning\",\"source\":\"aws.ec2\",\"account\":\"000000000000\",\"time\":\"2000-01-01T00:00:00.000Z\",\"region\":\"eu-west-1\",\"resources\":[\"arn:aws:ec2:eu-west-1a:instance/i-00000000000000000\"],\"detail\":{\"instance-id\":\"i-00000000000000000\",\"instance-action\":\"terminate\"}}")
 	msg.SetReceiptHandle(GenerateSqsMessageHandle())
 	output.SetMessages(msgList)
 	return &output
@@ -61,8 +71,8 @@ func GenerateInvalidMessage(t *testing.T) *sqs.ReceiveMessageOutput {
 	return &output
 }
 
-func GeneratePlainMessage() util.Message {
-	return util.Message{
+func GeneratePlainMessage() util.ASGMessage {
+	return util.ASGMessage{
 		LifecycleHookName:    aws.String(""),
 		AccountId:            aws.String(""),
 		RequestId:            aws.String(""),

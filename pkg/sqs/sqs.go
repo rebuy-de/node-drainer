@@ -98,36 +98,46 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 	for m := range msg.Messages {
 		log.Debugf("Message body: %s", string(*msg.Messages[m].Body))
 
-		var message util.Message
-		err := json.Unmarshal([]byte(*msg.Messages[m].Body), &message)
-
 		messageHandle := msg.Messages[m].ReceiptHandle
 
-		if err != nil {
-			log.Error(err)
+		var messageASG util.ASGMessage
+		errASG := json.Unmarshal([]byte(*msg.Messages[m].Body), &messageASG)
+		if errASG != nil {
+			log.Error(errASG)
 			mh.deleteConsumedMessage(messageHandle)
-			return
 		}
 
-		if message.EC2InstanceId == nil {
+		var messageSpot util.SpotMessage
+		errSpot := json.Unmarshal([]byte(*msg.Messages[m].Body), &messageSpot)
+		if errSpot != nil {
+			log.Error(errSpot)
+			mh.deleteConsumedMessage(messageHandle)
+		}
+
+		if messageASG.AutoScalingGroupName != nil && messageASG.EC2InstanceId != nil {
+			mh.heartbeat(&messageASG)
+			mh.triggerDrain(messageASG.EC2InstanceId)
+			mh.deleteConsumedMessage(messageHandle)
+			mh.notifyASG(&messageASG)
+		} else if messageSpot.DetailType != nil {
+			for _, instanceId := range messageSpot.Resources {
+				mh.triggerDrain(instanceId)
+			}
+			mh.deleteConsumedMessage(messageHandle)
+		} else {
 			log.Warn("Invalid message received, skipping...")
 			mh.deleteConsumedMessage(messageHandle)
 			return
 		}
-
-		// Sending a heartbeat to ASG to ensure enough time is given for draining
-		mh.heartbeat(&message)
-		mh.triggerDrain(&message)
-		mh.deleteConsumedMessage(messageHandle)
-		mh.notifyASG(&message)
 
 		log.Infof("Cooling down %d seconds before moving on...", mh.CoolDown)
 		time.Sleep(time.Duration(mh.CoolDown) * time.Second)
 	}
 }
 
-func (mh *MessageHandler) heartbeat(msg *util.Message) {
+func (mh *MessageHandler) heartbeat(msg *util.ASGMessage) {
 	log.Info("Sending ASG heartbeat for instance: " + *msg.EC2InstanceId)
+
 	input := &autoscaling.RecordLifecycleActionHeartbeatInput{
 		AutoScalingGroupName: msg.AutoScalingGroupName,
 		InstanceId:           msg.EC2InstanceId,
@@ -141,11 +151,11 @@ func (mh *MessageHandler) heartbeat(msg *util.Message) {
 	}
 }
 
-func (mh *MessageHandler) triggerDrain(msg *util.Message) {
+func (mh *MessageHandler) triggerDrain(instanceID *string) {
 	var filter []*ec2.Filter
 	var instanceIDs []*string
 
-	instanceIDs = append(instanceIDs, msg.EC2InstanceId)
+	instanceIDs = append(instanceIDs, instanceID)
 
 	input := &ec2.DescribeInstancesInput{DryRun: aws.Bool(false), Filters: filter, InstanceIds: instanceIDs}
 	out, err := mh.SvcEC2.DescribeInstances(input)
@@ -174,7 +184,7 @@ func (mh *MessageHandler) deleteConsumedMessage(receiptHandle *string) {
 	}
 }
 
-func (mh *MessageHandler) notifyASG(msg *util.Message) {
+func (mh *MessageHandler) notifyASG(msg *util.ASGMessage) {
 	log.Debug("Notifying ASG about draining completion for node: " + *msg.EC2InstanceId)
 	input := &autoscaling.CompleteLifecycleActionInput{
 		AutoScalingGroupName:  msg.AutoScalingGroupName,

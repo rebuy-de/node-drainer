@@ -24,7 +24,7 @@ type AWSProfile struct {
 	SessionToken    string
 }
 
-type Message struct {
+type ASGMessage struct {
 	LifecycleHookName    *string
 	AccountId            *string
 	RequestId            *string
@@ -34,6 +34,20 @@ type Message struct {
 	Time                 *string
 	EC2InstanceId        *string
 	LifecycleActionToken *string
+}
+
+type SpotMessage struct {
+	Version    *string
+	Id         *string
+	DetailType *string `json:"detail-type"`
+	Source     *string
+	Time       *string
+	Region     *string
+	Resources  []*string
+	Detail     struct {
+		InstanceId     *string
+		InstanceAction *string
+	}
 }
 
 func (c *AWSProfile) BuildSession(region string) *session.Session {

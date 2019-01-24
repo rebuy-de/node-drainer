@@ -3,6 +3,7 @@ package sqs
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -109,18 +110,30 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 
 		if messageASG.AutoScalingGroupName != nil && messageASG.EC2InstanceId != nil {
 			mh.heartbeat(&messageASG)
-			mh.triggerDrain(messageASG.EC2InstanceId, false)
-			mh.deleteConsumedMessage(messageHandle)
-			mh.notifyASG(&messageASG)
+			mh.triggerDrain(messageASG.EC2InstanceId, false, func() {
+				log.Debugf("finishing handling of instance %s", messageASG.EC2InstanceId)
+				mh.deleteConsumedMessage(messageHandle)
+				mh.notifyASG(&messageASG)
+			})
+
 		} else if messageSpot.DetailType != nil {
 			for _, instanceId := range messageSpot.Resources {
-				mh.triggerDrain(instanceId, true)
+				mh.triggerDrain(instanceId, true, nil)
 			}
-			mh.deleteConsumedMessage(messageHandle)
+
+			// Note: Deleting this message does not wait for drain to be done.
+			// This is because it would be quite hard to actually sync multiple
+			// drain routines via callback. Therefore we wait tem minutes at
+			// least, so we could pick up it again on a possible restart.
+			time.AfterFunc(10*time.Minute, func() {
+				mh.deleteConsumedMessage(messageHandle)
+			})
+
 		} else {
 			log.Warn("Invalid message received, skipping...")
 			mh.deleteConsumedMessage(messageHandle)
 			return
+
 		}
 	}
 }
@@ -141,25 +154,42 @@ func (mh *MessageHandler) heartbeat(msg *util.ASGMessage) {
 	}
 }
 
-func (mh *MessageHandler) triggerDrain(instanceID *string, fastpath bool) {
+func (mh *MessageHandler) triggerDrain(instanceID *string, fastpath bool, onDone func()) {
+	log.Debugf("Triggering drain for instance %s", instanceID)
+
 	var filter []*ec2.Filter
 	var instanceIDs []*string
 
 	instanceIDs = append(instanceIDs, instanceID)
 
-	input := &ec2.DescribeInstancesInput{DryRun: aws.Bool(false), Filters: filter, InstanceIds: instanceIDs}
+	input := &ec2.DescribeInstancesInput{
+		DryRun:      aws.Bool(false),
+		Filters:     filter,
+		InstanceIds: instanceIDs,
+	}
 	out, err := mh.SvcEC2.DescribeInstances(input)
 	if err != nil {
 		log.Error(err)
+		if onDone != nil {
+			onDone()
+		}
+		return
 	}
 
+	requested := false
 	for r := range out.Reservations {
 		for i := range out.Reservations[r].Instances {
 			mh.Requests <- controller.Request{
 				InstanceID: *out.Reservations[r].Instances[i].PrivateDnsName,
 				Fastpath:   fastpath,
+				OnDone:     onDone,
 			}
+			requested = true
 		}
+	}
+
+	if !requested && onDone != nil {
+		onDone()
 	}
 }
 

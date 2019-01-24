@@ -5,15 +5,31 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/rebuy-de/node-drainer/pkg/prom"
-	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/rebuy-de/node-drainer/pkg/prom"
+	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 )
+
+type ErrNodeNotAvailable string
+
+func (err ErrNodeNotAvailable) Error() string {
+	return fmt.Sprintf("node %s not available, skipping draining...", err)
+}
+
+func IsErrNodeNotAvailable(err error) bool {
+	_, ok := err.(ErrNodeNotAvailable)
+	if ok {
+		return true
+	}
+
+	return false
+}
 
 type Drainer struct {
 	Clientset     kubernetes.Interface
@@ -46,8 +62,7 @@ func NewDrainer(clientset kubernetes.Interface) *Drainer {
 func (d *Drainer) Drain(nodeName string) error {
 	n := d.node(nodeName)
 	if n == nil {
-		log.Info("node " + nodeName + " not available, skipping draining...")
-		return fmt.Errorf("node " + nodeName + " not available, skipping draining...")
+		return ErrNodeNotAvailable(nodeName)
 	}
 
 	log.Info("draining: ", n.GetName())

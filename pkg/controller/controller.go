@@ -7,6 +7,7 @@ import (
 	"github.com/benbjohnson/clock"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/rebuy-de/node-drainer/pkg/drainer"
 	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 	"github.com/sirupsen/logrus"
 )
@@ -113,18 +114,18 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 				continue
 			}
 
-			logrus.Debugf("draining next node %s from backlog", request.InstanceID)
+			logrus.Infof("draining next node %s from backlog", request.InstanceID)
 			c.metricLastActivity.WithLabelValues("drain-backlog").SetToCurrentTime()
 			go c.Drain(*request)
 
 		case request := <-c.requests:
 			if !request.Fastpath {
-				logrus.Debugf("adding node %s to the backlog", request.InstanceID)
+				logrus.Infof("adding node %s to the backlog", request.InstanceID)
 				backlog.Add(request)
 				continue
 			}
 
-			logrus.Debugf("draining node %s using fast-path", request.InstanceID)
+			logrus.Infof("draining node %s using fast-path", request.InstanceID)
 			c.metricLastActivity.WithLabelValues("drain-fastpath").SetToCurrentTime()
 			go c.Drain(request)
 		}
@@ -141,6 +142,13 @@ func (c *Controller) Drain(request Request) {
 	}()
 
 	err := c.drainer.Drain(request.InstanceID)
-	cmdutil.Must(err) // Not sure how to handle such an error properly.
+	if err != nil && !drainer.IsErrNodeNotAvailable(err) {
+		// Unexpected error. Better let us die and try again.
+		logrus.Errorf("%+v", err)
+		cmdutil.Exit(1)
+	}
 
+	if request.OnDone != nil {
+		request.OnDone()
+	}
 }

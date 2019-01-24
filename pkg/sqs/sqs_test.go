@@ -15,64 +15,53 @@ import (
 
 func TestHandleMessage(t *testing.T) {
 	cases := []struct {
-		name                              string
-		message                           *sqs.ReceiveMessageOutput
-		WantDescribeInstancesCalled       bool
-		WantDeleteMessageCalled           bool
-		WantCompleteLifecycleActionCalled bool
-		WantHeartbeatCalled               bool
-		WantDrainCalls                    int
-		Ec2ReturnValue                    *ec2.DescribeInstancesOutput
+		name                        string
+		message                     *sqs.ReceiveMessageOutput
+		WantDescribeInstancesCalled bool
+		WantDeleteMessageCalled     bool
+		WantHeartbeatCalled         bool
+		WantDrainCalls              int
+		Ec2ReturnValue              *ec2.DescribeInstancesOutput
 	}{
 		{
-			name:                              "no_messages",
-			message:                           &sqs.ReceiveMessageOutput{},
-			WantDescribeInstancesCalled:       false,
-			WantDeleteMessageCalled:           false,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalls:                    0,
-			Ec2ReturnValue:                    &ec2.DescribeInstancesOutput{},
+			name:                        "no_messages",
+			message:                     &sqs.ReceiveMessageOutput{},
+			WantDescribeInstancesCalled: false,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              0,
+			Ec2ReturnValue:              &ec2.DescribeInstancesOutput{},
 		},
 		{
-			name:                              "valid_asg_message",
-			message:                           tu.GenerateValidASGMessage(t),
-			WantDescribeInstancesCalled:       true,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: true,
-			WantHeartbeatCalled:               true,
-			WantDrainCalls:                    1,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
+			name:                        "valid_asg_message",
+			message:                     tu.GenerateValidASGMessage(t),
+			WantDescribeInstancesCalled: true,
+			WantHeartbeatCalled:         true,
+			WantDrainCalls:              1,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(false),
 		},
 		{
-			name:                              "valid_spot_message",
-			message:                           tu.GenerateValidSpotMessage(t),
-			WantDescribeInstancesCalled:       true,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalls:                    1,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
+			name:                        "valid_spot_message",
+			message:                     tu.GenerateValidSpotMessage(t),
+			WantDescribeInstancesCalled: true,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              1,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(false),
 		},
 		{
-			name:                              "test_message",
-			message:                           tu.GenerateTestMessage(t),
-			WantDescribeInstancesCalled:       false,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalls:                    0,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(true),
+			name:                        "test_message",
+			message:                     tu.GenerateTestMessage(t),
+			WantDescribeInstancesCalled: false,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              0,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(true),
 		},
 		{
-			name:                              "invalid_message",
-			message:                           tu.GenerateInvalidMessage(t),
-			WantDescribeInstancesCalled:       false,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalls:                    0,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(true),
+			name:                        "invalid_message",
+			message:                     tu.GenerateInvalidMessage(t),
+			WantDescribeInstancesCalled: false,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              0,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(true),
 		},
 	}
 
@@ -84,14 +73,6 @@ func TestHandleMessage(t *testing.T) {
 			mh.handleMessage(tc.message)
 			if svcEc2.WasDescribeInstancesCalled != tc.WantDescribeInstancesCalled {
 				t.Log("WasDescribeInstancesCalled in undesired state: " + strconv.FormatBool(svcEc2.WasDescribeInstancesCalled))
-				t.Fail()
-			}
-			if svcSqs.WasDeleteMessageCalled != tc.WantDeleteMessageCalled {
-				t.Log("WasDeleteMessageCalled in undesired state: " + strconv.FormatBool(svcSqs.WasDeleteMessageCalled))
-				t.Fail()
-			}
-			if svcAutoscaling.WasCompleteLifecycleActionCalled != tc.WantCompleteLifecycleActionCalled {
-				t.Log("WasCompleteLifecycleActionCalled in undesired state: " + strconv.FormatBool(svcAutoscaling.WasCompleteLifecycleActionCalled))
 				t.Fail()
 			}
 			if svcAutoscaling.WasHeartbeatCalled != tc.WantHeartbeatCalled {
@@ -199,7 +180,7 @@ func TestTriggerDrain(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ec2Svc.ReturnError = tc.callFails
-			mh.triggerDrain(message.EC2InstanceId, true)
+			mh.triggerDrain(message.EC2InstanceId, true, nil)
 			have := ec2Svc.WasDescribeInstancesCalled
 			if have != tc.want {
 				t.Fail()
@@ -231,7 +212,7 @@ func TestTriggerDrainCount(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mh.triggerDrain(message.EC2InstanceId, true)
+			mh.triggerDrain(message.EC2InstanceId, true, nil)
 			ec2Svc.ReturnValue = tc.ec2Conf
 			if len(md) != len(tc.want) {
 				t.Fail()

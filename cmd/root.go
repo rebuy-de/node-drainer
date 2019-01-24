@@ -34,7 +34,7 @@ func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []strin
 		cmdutil.Exit(1)
 	}
 
-	prom.Run(nd.MetricsPort)
+	metricsRegistry := prom.Run(nd.MetricsPort)
 
 	logLevel, err := log.ParseLevel(nd.LogLevel)
 	if err != nil {
@@ -65,6 +65,7 @@ func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []strin
 
 	sqs := sqs.NewMessageHandler(requests, &queueUrl, nd.SQSWait, svcAutoscaling, svcSqs, svcEc2, nd.CoolDown)
 	ctl := controller.New(drainer, requests)
+	ctl.RegisterMetrics(metricsRegistry)
 
 	go sqs.Run(ctx)
 	cmdutil.Must(ctl.Reconcile(ctx))

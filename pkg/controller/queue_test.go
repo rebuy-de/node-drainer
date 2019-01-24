@@ -3,11 +3,12 @@ package controller_test
 import (
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rebuy-de/node-drainer/pkg/controller"
 )
 
 func TestQueue(t *testing.T) {
-	q := new(controller.Queue)
+	q := controller.NewQueue(prometheus.NewGauge(prometheus.GaugeOpts{}))
 
 	q.Add(controller.Request{InstanceID: "1", Fastpath: false})
 	q.Add(controller.Request{InstanceID: "2", Fastpath: false})

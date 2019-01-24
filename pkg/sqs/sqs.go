@@ -1,10 +1,8 @@
 package sqs
 
 import (
+	"context"
 	"encoding/json"
-	"os"
-	"os/signal"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -15,16 +13,14 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
+
+	"github.com/rebuy-de/node-drainer/pkg/controller"
 	"github.com/rebuy-de/node-drainer/pkg/util"
 	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 )
 
-type Trigger interface {
-	Drain(string) error
-}
-
 type MessageHandler struct {
-	Drainer        Trigger
+	Requests       chan controller.Request
 	DrainQueue     *string
 	Timeout        int
 	SvcAutoscaling autoscalingiface.AutoScalingAPI
@@ -45,9 +41,9 @@ type Message struct {
 	LifecycleActionToken *string
 }
 
-func NewMessageHandler(drainer Trigger, drainQueue *string, timeout int, svcAutoscaling autoscalingiface.AutoScalingAPI, svcSQS sqsiface.SQSAPI, svcEC2 ec2iface.EC2API, coolDown int) *MessageHandler {
+func NewMessageHandler(requests chan controller.Request, drainQueue *string, timeout int, svcAutoscaling autoscalingiface.AutoScalingAPI, svcSQS sqsiface.SQSAPI, svcEC2 ec2iface.EC2API, coolDown int) *MessageHandler {
 	return &MessageHandler{
-		Drainer:        drainer,
+		Requests:       requests,
 		DrainQueue:     drainQueue,
 		Timeout:        timeout,
 		SvcAutoscaling: svcAutoscaling,
@@ -57,16 +53,13 @@ func NewMessageHandler(drainer Trigger, drainQueue *string, timeout int, svcAuto
 	}
 }
 
-func (mh *MessageHandler) Run() error {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
+func (mh *MessageHandler) Run(ctx context.Context) {
 	log.Info("Waiting for messages")
 
 	for {
 		select {
-		case <-c:
-			return nil
+		case <-ctx.Done():
+			return
 		default:
 			result, err := mh.SvcSQS.ReceiveMessage(&sqs.ReceiveMessageInput{
 				AttributeNames: []*string{
@@ -116,12 +109,12 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 
 		if messageASG.AutoScalingGroupName != nil && messageASG.EC2InstanceId != nil {
 			mh.heartbeat(&messageASG)
-			mh.triggerDrain(messageASG.EC2InstanceId)
+			mh.triggerDrain(messageASG.EC2InstanceId, false)
 			mh.deleteConsumedMessage(messageHandle)
 			mh.notifyASG(&messageASG)
 		} else if messageSpot.DetailType != nil {
 			for _, instanceId := range messageSpot.Resources {
-				mh.triggerDrain(instanceId)
+				mh.triggerDrain(instanceId, true)
 			}
 			mh.deleteConsumedMessage(messageHandle)
 		} else {
@@ -129,9 +122,6 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 			mh.deleteConsumedMessage(messageHandle)
 			return
 		}
-
-		log.Infof("Cooling down %d seconds before moving on...", mh.CoolDown)
-		time.Sleep(time.Duration(mh.CoolDown) * time.Second)
 	}
 }
 
@@ -151,7 +141,7 @@ func (mh *MessageHandler) heartbeat(msg *util.ASGMessage) {
 	}
 }
 
-func (mh *MessageHandler) triggerDrain(instanceID *string) {
+func (mh *MessageHandler) triggerDrain(instanceID *string, fastpath bool) {
 	var filter []*ec2.Filter
 	var instanceIDs []*string
 
@@ -165,7 +155,10 @@ func (mh *MessageHandler) triggerDrain(instanceID *string) {
 
 	for r := range out.Reservations {
 		for i := range out.Reservations[r].Instances {
-			mh.Drainer.Drain(*out.Reservations[r].Instances[i].PrivateDnsName)
+			mh.Requests <- controller.Request{
+				InstanceID: *out.Reservations[r].Instances[i].PrivateDnsName,
+				Fastpath:   fastpath,
+			}
 		}
 	}
 }

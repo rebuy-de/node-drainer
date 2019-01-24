@@ -4,23 +4,22 @@ import (
 	"testing"
 
 	"github.com/rebuy-de/node-drainer/pkg/controller"
-	"github.com/rebuy-de/node-drainer/pkg/controller/fake"
 )
 
 func TestQueue(t *testing.T) {
 	q := new(controller.Queue)
 
-	q.Add(fake.NewRequest("1", false))
-	q.Add(fake.NewRequest("2", false))
-	q.Add(fake.NewRequest("3", false))
+	q.Add(controller.Request{InstanceID: "1", Fastpath: false})
+	q.Add(controller.Request{InstanceID: "2", Fastpath: false})
+	q.Add(controller.Request{InstanceID: "3", Fastpath: false})
 
-	have1 := q.Poll().InstanceID()
-	have2 := q.Poll().InstanceID()
+	have1 := q.Poll().InstanceID
+	have2 := q.Poll().InstanceID
 
-	q.Add(fake.NewRequest("4", false))
+	q.Add(controller.Request{InstanceID: "4", Fastpath: false})
 
-	have3 := q.Poll().InstanceID()
-	have4 := q.Poll().InstanceID()
+	have3 := q.Poll().InstanceID
+	have4 := q.Poll().InstanceID
 	have5 := q.Poll()
 
 	if have1 != "1" {

@@ -73,17 +73,17 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 				continue
 			}
 
-			logrus.Debugf("draining next node %s from backlog", request.InstanceID())
-			go c.Drain(request)
+			logrus.Debugf("draining next node %s from backlog", request.InstanceID)
+			go c.Drain(*request)
 
 		case request := <-c.requests:
-			if !request.UseFastpath() {
-				logrus.Debugf("adding node %s to the backlog", request.InstanceID())
+			if !request.Fastpath {
+				logrus.Debugf("adding node %s to the backlog", request.InstanceID)
 				backlog.Add(request)
 				continue
 			}
 
-			logrus.Debugf("draining node %s using fast-path", request.InstanceID())
+			logrus.Debugf("draining node %s using fast-path", request.InstanceID)
 			go c.Drain(request)
 		}
 	}
@@ -96,8 +96,7 @@ func (c *Controller) Drain(request Request) {
 		c.inProgress -= 1
 	}()
 
-	id := request.InstanceID()
-	err := c.drainer.Drain(id)
+	err := c.drainer.Drain(request.InstanceID)
 	cmdutil.Must(err) // Not sure how to handle such an error properly.
 
 }

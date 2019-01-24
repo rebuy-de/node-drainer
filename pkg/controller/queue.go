@@ -9,7 +9,7 @@ func (q *Queue) Add(r Request) {
 
 // Poll retrieves, but does not remove, the head of this queue, or returns null
 // if this queue is empty.
-func (q *Queue) Poll() Request {
+func (q *Queue) Poll() *Request {
 	if len(*q) < 1 {
 		return nil
 	}
@@ -17,5 +17,5 @@ func (q *Queue) Poll() Request {
 	r := (*q)[0]
 	*q = (*q)[1:]
 
-	return r
+	return &r
 }

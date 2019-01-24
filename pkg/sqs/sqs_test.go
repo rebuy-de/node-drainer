@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/rebuy-de/node-drainer/pkg/controller"
 	tu "github.com/rebuy-de/node-drainer/pkg/sqs/test_util"
 )
 
@@ -20,7 +21,7 @@ func TestHandleMessage(t *testing.T) {
 		WantDeleteMessageCalled           bool
 		WantCompleteLifecycleActionCalled bool
 		WantHeartbeatCalled               bool
-		WantDrainCalled                   bool
+		WantDrainCalls                    int
 		Ec2ReturnValue                    *ec2.DescribeInstancesOutput
 	}{
 		{
@@ -30,7 +31,7 @@ func TestHandleMessage(t *testing.T) {
 			WantDeleteMessageCalled:           false,
 			WantCompleteLifecycleActionCalled: false,
 			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   false,
+			WantDrainCalls:                    0,
 			Ec2ReturnValue:                    &ec2.DescribeInstancesOutput{},
 		},
 		{
@@ -40,7 +41,7 @@ func TestHandleMessage(t *testing.T) {
 			WantDeleteMessageCalled:           true,
 			WantCompleteLifecycleActionCalled: true,
 			WantHeartbeatCalled:               true,
-			WantDrainCalled:                   true,
+			WantDrainCalls:                    1,
 			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
 		},
 		{
@@ -50,7 +51,7 @@ func TestHandleMessage(t *testing.T) {
 			WantDeleteMessageCalled:           true,
 			WantCompleteLifecycleActionCalled: false,
 			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   true,
+			WantDrainCalls:                    1,
 			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
 		},
 		{
@@ -60,7 +61,7 @@ func TestHandleMessage(t *testing.T) {
 			WantDeleteMessageCalled:           true,
 			WantCompleteLifecycleActionCalled: false,
 			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   false,
+			WantDrainCalls:                    0,
 			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(true),
 		},
 		{
@@ -70,15 +71,15 @@ func TestHandleMessage(t *testing.T) {
 			WantDeleteMessageCalled:           true,
 			WantCompleteLifecycleActionCalled: false,
 			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   false,
+			WantDrainCalls:                    0,
 			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(true),
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			drainer, svcAutoscaling, svcSqs, svcEc2 := tu.GenerateMessageHandlerArgs()
-			mh := NewMessageHandler(drainer, aws.String("drainQueue"), 10, svcAutoscaling, svcSqs, svcEc2, 0)
+			requests, svcAutoscaling, svcSqs, svcEc2 := tu.GenerateMessageHandlerArgs()
+			mh := NewMessageHandler(requests, aws.String("drainQueue"), 10, svcAutoscaling, svcSqs, svcEc2, 0)
 			svcEc2.ReturnValue = tc.Ec2ReturnValue
 			mh.handleMessage(tc.message)
 			if svcEc2.WasDescribeInstancesCalled != tc.WantDescribeInstancesCalled {
@@ -97,8 +98,8 @@ func TestHandleMessage(t *testing.T) {
 				t.Log("WasHeartbeatCalled in undesired state: " + strconv.FormatBool(svcAutoscaling.WasHeartbeatCalled))
 				t.Fail()
 			}
-			if drainer.WasDrainCalled != tc.WantDrainCalled {
-				t.Log("WasDrainCalled in undesired state: " + strconv.FormatBool(drainer.WasDrainCalled))
+			if len(requests) != tc.WantDrainCalls {
+				t.Logf("WasDrainCalls in undesired state: %d", len(requests))
 				t.Fail()
 			}
 		})
@@ -108,7 +109,7 @@ func TestHandleMessage(t *testing.T) {
 func TestNotifyASG(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	autscalingSvc := tu.NewMockAutoScalingClient(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
+	mh := NewMessageHandler(make(chan controller.Request, 10), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
 
 	cases := []struct {
 		name      string
@@ -142,7 +143,7 @@ func TestNotifyASG(t *testing.T) {
 func TestHeartbeat(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	autscalingSvc := tu.NewMockAutoScalingClient(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
+	mh := NewMessageHandler(make(chan controller.Request, 10), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
 
 	cases := []struct {
 		name      string
@@ -176,7 +177,7 @@ func TestHeartbeat(t *testing.T) {
 func TestTriggerDrain(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	ec2Svc := tu.NewMockEC2Client(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc, 0)
+	mh := NewMessageHandler(make(chan controller.Request, 10), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc, 0)
 
 	cases := []struct {
 		name      string
@@ -198,7 +199,7 @@ func TestTriggerDrain(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ec2Svc.ReturnError = tc.callFails
-			mh.triggerDrain(message.EC2InstanceId)
+			mh.triggerDrain(message.EC2InstanceId, true)
 			have := ec2Svc.WasDescribeInstancesCalled
 			if have != tc.want {
 				t.Fail()
@@ -209,7 +210,7 @@ func TestTriggerDrain(t *testing.T) {
 func TestTriggerDrainCount(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	ec2Svc := tu.NewMockEC2Client(false)
-	md := tu.NewMockDrainer()
+	md := make(chan controller.Request, 10)
 	mh := NewMessageHandler(md, aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc, 0)
 	cases := []struct {
 		name    string
@@ -230,10 +231,9 @@ func TestTriggerDrainCount(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mh.triggerDrain(message.EC2InstanceId)
+			mh.triggerDrain(message.EC2InstanceId, true)
 			ec2Svc.ReturnValue = tc.ec2Conf
-			have := md.Names
-			if len(have) != len(tc.want) {
+			if len(md) != len(tc.want) {
 				t.Fail()
 			}
 		})
@@ -243,7 +243,7 @@ func TestTriggerDrainCount(t *testing.T) {
 func TestDeleteConsumedMessage(t *testing.T) {
 	if os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "crash" || os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "nocrash" {
 		sqsSvc := tu.NewMockSQSClient(false)
-		mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), sqsSvc, tu.NewMockEC2Client(false), 0)
+		mh := NewMessageHandler(make(chan controller.Request, 10), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), sqsSvc, tu.NewMockEC2Client(false), 0)
 		if os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "crash" {
 			sqsSvc.ReturnError = true
 			mh.deleteConsumedMessage(aws.String(""))

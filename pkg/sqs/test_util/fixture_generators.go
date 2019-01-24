@@ -6,6 +6,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/sqs"
+
+	"github.com/rebuy-de/node-drainer/pkg/controller"
 	"github.com/rebuy-de/node-drainer/pkg/util"
 )
 
@@ -23,8 +25,8 @@ func GenerateDescribeInstancesOutput(empty bool) *ec2.DescribeInstancesOutput {
 	return output
 }
 
-func GenerateMessageHandlerArgs() (*MockDrainer, *MockAutoScalingClient, *MockSQSClient, *MockEC2Client) {
-	return NewMockDrainer(), NewMockAutoScalingClient(false), NewMockSQSClient(false), NewMockEC2Client(false)
+func GenerateMessageHandlerArgs() (chan controller.Request, *MockAutoScalingClient, *MockSQSClient, *MockEC2Client) {
+	return make(chan controller.Request, 10), NewMockAutoScalingClient(false), NewMockSQSClient(false), NewMockEC2Client(false)
 }
 
 func GenerateSqsMessageHandle() string {

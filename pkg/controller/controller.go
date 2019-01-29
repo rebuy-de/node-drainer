@@ -114,18 +114,18 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 				continue
 			}
 
-			logrus.Infof("draining next node %s from backlog", request.InstanceID)
+			logrus.Infof("draining next node %s from backlog", request.NodeName)
 			c.metricLastActivity.WithLabelValues("drain-backlog").SetToCurrentTime()
 			go c.Drain(*request)
 
 		case request := <-c.requests:
 			if !request.Fastpath {
-				logrus.Infof("adding node %s to the backlog", request.InstanceID)
+				logrus.Infof("adding node %s to the backlog", request.NodeName)
 				backlog.Add(request)
 				continue
 			}
 
-			logrus.Infof("draining node %s using fast-path", request.InstanceID)
+			logrus.Infof("draining node %s using fast-path", request.NodeName)
 			c.metricLastActivity.WithLabelValues("drain-fastpath").SetToCurrentTime()
 			go c.Drain(request)
 		}
@@ -141,7 +141,7 @@ func (c *Controller) Drain(request Request) {
 		c.metricDraining.Set(float64(c.inProgress))
 	}()
 
-	err := c.drainer.Drain(request.InstanceID)
+	err := c.drainer.Drain(request.NodeName)
 	if err != nil && !drainer.IsErrNodeNotAvailable(err) {
 		// Unexpected error. Better let us die and try again.
 		logrus.Errorf("%+v", err)

@@ -3,7 +3,6 @@ package sqs
 import (
 	"context"
 	"encoding/json"
-	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -107,23 +106,23 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 
 		if messageASG.AutoScalingGroupName != nil && messageASG.EC2InstanceId != nil {
 			mh.heartbeat(&messageASG)
-			mh.triggerDrain(messageASG.EC2InstanceId, false, func() {
-				mh.deleteConsumedMessage(messageHandle)
+			names := mh.mustResolveNodeNames(messageASG.EC2InstanceId)
+			if len(names) == 0 {
 				mh.notifyASG(&messageASG)
-			})
-
-		} else if messageSpot.DetailType != nil {
-			for _, instanceId := range messageSpot.Resources {
-				mh.triggerDrain(instanceId, true, nil)
+				mh.deleteConsumedMessage(messageHandle)
+				continue
 			}
 
-			// Note: Deleting this message does not wait for drain to be done.
-			// This is because it would be quite hard to actually sync multiple
-			// drain routines via callback. Therefore we wait tem minutes at
-			// least, so we could pick up it again on a possible restart.
-			time.AfterFunc(10*time.Minute, func() {
+			mh.triggerDrain(names, false)
+
+		} else if messageSpot.DetailType != nil {
+			names := mh.mustResolveNodeNames(messageSpot.Resources...)
+			if len(names) == 0 {
 				mh.deleteConsumedMessage(messageHandle)
-			})
+				continue
+			}
+
+			mh.triggerDrain(names, true)
 
 		} else {
 			log.Warn("Invalid message received, skipping...")
@@ -150,41 +149,52 @@ func (mh *MessageHandler) heartbeat(msg *util.ASGMessage) {
 	}
 }
 
-func (mh *MessageHandler) triggerDrain(instanceID *string, fastpath bool, onDone func()) {
-	var filter []*ec2.Filter
-	var instanceIDs []*string
-
-	instanceIDs = append(instanceIDs, instanceID)
-
-	input := &ec2.DescribeInstancesInput{
-		DryRun:      aws.Bool(false),
-		Filters:     filter,
-		InstanceIds: instanceIDs,
+func (mh *MessageHandler) triggerDrain(nodeNames []string, fastpath bool) {
+	for _, nodeName := range nodeNames {
+		mh.Requests <- controller.Request{
+			NodeName: nodeName,
+			Fastpath: fastpath,
+		}
 	}
-	out, err := mh.SvcEC2.DescribeInstances(input)
+}
+
+func (mh *MessageHandler) mustResolveNodeNames(instanceIDs ...*string) []string {
+	names, err := mh.resolveNodeNames(instanceIDs...)
 	if err != nil {
 		log.Error(err)
-		if onDone != nil {
-			onDone()
-		}
-		return
+		cmdutil.Exit(1)
+	}
+	return names
+}
+
+func (mh *MessageHandler) resolveNodeNames(instanceIDs ...*string) ([]string, error) {
+	input := &ec2.DescribeInstancesInput{
+		DryRun: aws.Bool(false),
+		Filters: []*ec2.Filter{
+			&ec2.Filter{
+				Name: aws.String("instance-state-name"),
+				Values: []*string{
+					aws.String("pending"),
+					aws.String("running"),
+				},
+			},
+		},
+		InstanceIds: instanceIDs,
 	}
 
-	requested := false
+	out, err := mh.SvcEC2.DescribeInstances(input)
+	if err != nil {
+		return nil, err
+	}
+
+	names := []string{}
 	for r := range out.Reservations {
 		for i := range out.Reservations[r].Instances {
-			mh.Requests <- controller.Request{
-				InstanceID: *out.Reservations[r].Instances[i].PrivateDnsName,
-				Fastpath:   fastpath,
-				OnDone:     onDone,
-			}
-			requested = true
+			names = append(names, *out.Reservations[r].Instances[i].PrivateDnsName)
 		}
 	}
 
-	if !requested && onDone != nil {
-		onDone()
-	}
+	return names, nil
 }
 
 func (mh *MessageHandler) deleteConsumedMessage(receiptHandle *string) {

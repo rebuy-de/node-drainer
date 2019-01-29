@@ -50,7 +50,7 @@ func TestControllerSimpleBacklog(t *testing.T) {
 	drainer, requests, clk, deferer := initTestController(t)
 	defer deferer()
 
-	requests <- Request{InstanceID: "i-010", Fastpath: false}
+	requests <- Request{NodeName: "i-010", Fastpath: false}
 	drainer.Assert(t, "", "")
 
 	time.Sleep(10 * time.Millisecond) // give reconcile routine time to act
@@ -65,7 +65,7 @@ func TestControllerSimpleFastpath(t *testing.T) {
 	drainer, requests, clk, deferer := initTestController(t)
 	defer deferer()
 
-	requests <- Request{InstanceID: "i-020", Fastpath: true}
+	requests <- Request{NodeName: "i-020", Fastpath: true}
 
 	time.Sleep(10 * time.Millisecond) // give reconcile routine time to act
 	clk.Add(10 * time.Second)
@@ -79,8 +79,8 @@ func TestControllerBacklogBlocking(t *testing.T) {
 	drainer, requests, clk, deferer := initTestController(t)
 	defer deferer()
 
-	requests <- Request{InstanceID: "i-030", Fastpath: false}
-	requests <- Request{InstanceID: "i-031", Fastpath: false}
+	requests <- Request{NodeName: "i-030", Fastpath: false}
+	requests <- Request{NodeName: "i-031", Fastpath: false}
 
 	// wait for loop to pick it up
 	time.Sleep(10 * time.Millisecond) // give reconcile routine time to act
@@ -104,7 +104,7 @@ func TestControllerAcknowledgeFastpath(t *testing.T) {
 	drainer, requests, clk, deferer := initTestController(t)
 	defer deferer()
 
-	requests <- Request{InstanceID: "i-040", Fastpath: false}
+	requests <- Request{NodeName: "i-040", Fastpath: false}
 	time.Sleep(10 * time.Millisecond) // give reconcile routine time to act
 
 	// wait for loop to pick it up
@@ -112,7 +112,7 @@ func TestControllerAcknowledgeFastpath(t *testing.T) {
 	drainer.Assert(t, "i-040", "")
 
 	// insert fastpath request, while another drain is in progress
-	requests <- Request{InstanceID: "i-041", Fastpath: true}
+	requests <- Request{NodeName: "i-041", Fastpath: true}
 	time.Sleep(10 * time.Millisecond) // give reconcile routine time to act
 
 	// wait for loop to pick it up

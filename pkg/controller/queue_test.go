@@ -10,17 +10,17 @@ import (
 func TestQueue(t *testing.T) {
 	q := controller.NewQueue(prometheus.NewGauge(prometheus.GaugeOpts{}))
 
-	q.Add(controller.Request{InstanceID: "1", Fastpath: false})
-	q.Add(controller.Request{InstanceID: "2", Fastpath: false})
-	q.Add(controller.Request{InstanceID: "3", Fastpath: false})
+	q.Add(controller.Request{NodeName: "1", Fastpath: false})
+	q.Add(controller.Request{NodeName: "2", Fastpath: false})
+	q.Add(controller.Request{NodeName: "3", Fastpath: false})
 
-	have1 := q.Poll().InstanceID
-	have2 := q.Poll().InstanceID
+	have1 := q.Poll().NodeName
+	have2 := q.Poll().NodeName
 
-	q.Add(controller.Request{InstanceID: "4", Fastpath: false})
+	q.Add(controller.Request{NodeName: "4", Fastpath: false})
 
-	have3 := q.Poll().InstanceID
-	have4 := q.Poll().InstanceID
+	have3 := q.Poll().NodeName
+	have4 := q.Poll().NodeName
 	have5 := q.Poll()
 
 	if have1 != "1" {

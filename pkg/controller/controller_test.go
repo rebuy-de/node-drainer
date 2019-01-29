@@ -26,7 +26,7 @@ func initTestController(t *testing.T) (*fake.Drainer, chan Request, *clock.Mock,
 
 	requests := make(chan Request)
 
-	ctl := New(drainer, requests)
+	ctl := New(drainer, requests, 10*time.Minute)
 	ctl.clock = clk
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -27,7 +27,6 @@ type MessageHandler struct {
 	SvcAutoscaling autoscalingiface.AutoScalingAPI
 	SvcSQS         sqsiface.SQSAPI
 	SvcEC2         ec2iface.EC2API
-	CoolDown       int
 }
 
 type Message struct {
@@ -42,15 +41,13 @@ type Message struct {
 	LifecycleActionToken *string
 }
 
-func NewMessageHandler(requests chan controller.Request, drainQueue *string, timeout int, svcAutoscaling autoscalingiface.AutoScalingAPI, svcSQS sqsiface.SQSAPI, svcEC2 ec2iface.EC2API, coolDown int) *MessageHandler {
+func NewMessageHandler(requests chan controller.Request, drainQueue *string, svcAutoscaling autoscalingiface.AutoScalingAPI, svcSQS sqsiface.SQSAPI, svcEC2 ec2iface.EC2API) *MessageHandler {
 	return &MessageHandler{
 		Requests:       requests,
 		DrainQueue:     drainQueue,
-		Timeout:        timeout,
 		SvcAutoscaling: svcAutoscaling,
 		SvcSQS:         svcSQS,
 		SvcEC2:         svcEC2,
-		CoolDown:       coolDown,
 	}
 }
 
@@ -71,8 +68,8 @@ func (mh *MessageHandler) Run(ctx context.Context) {
 				},
 				QueueUrl:            mh.DrainQueue,
 				MaxNumberOfMessages: aws.Int64(1),
-				VisibilityTimeout:   aws.Int64(1),
-				WaitTimeSeconds:     aws.Int64(int64(mh.Timeout)),
+				VisibilityTimeout:   aws.Int64(10),
+				WaitTimeSeconds:     aws.Int64(30),
 			})
 			if err != nil {
 				log.Error(err)
@@ -111,7 +108,6 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 		if messageASG.AutoScalingGroupName != nil && messageASG.EC2InstanceId != nil {
 			mh.heartbeat(&messageASG)
 			mh.triggerDrain(messageASG.EC2InstanceId, false, func() {
-				log.Debugf("finishing handling of instance %s", messageASG.EC2InstanceId)
 				mh.deleteConsumedMessage(messageHandle)
 				mh.notifyASG(&messageASG)
 			})
@@ -155,8 +151,6 @@ func (mh *MessageHandler) heartbeat(msg *util.ASGMessage) {
 }
 
 func (mh *MessageHandler) triggerDrain(instanceID *string, fastpath bool, onDone func()) {
-	log.Debugf("Triggering drain for instance %s", instanceID)
-
 	var filter []*ec2.Filter
 	var instanceIDs []*string
 

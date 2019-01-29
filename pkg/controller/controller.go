@@ -32,10 +32,10 @@ type Controller struct {
 	metricLastActivity *prometheus.GaugeVec
 }
 
-func New(drainer Drainer, requests chan Request) *Controller {
+func New(drainer Drainer, requests chan Request, cooldown time.Duration) *Controller {
 	return &Controller{
 		interval: 5 * time.Second,
-		cooldown: 10 * time.Minute,
+		cooldown: cooldown,
 
 		drainer:  drainer,
 		requests: requests,

@@ -204,3 +204,118 @@ func TestDeleteConsumedMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveNodeName(t *testing.T) {
+	cases := []struct {
+		Name           string
+		InstanceID     *string
+		EC2ReturnError bool
+		EC2ReturnValue *ec2.DescribeInstancesOutput
+		WantNodeName   *string
+		WantError      bool
+	}{
+		{
+			Name:         "ResistNilInstance",
+			InstanceID:   nil,
+			WantNodeName: nil,
+			WantError:    true,
+		},
+		{
+			Name:         "ResistEmptyInstance",
+			InstanceID:   aws.String(""),
+			WantNodeName: nil,
+			WantError:    true,
+		},
+		{
+			Name:           "HandleEmptyReservations",
+			InstanceID:     aws.String("i-000"),
+			WantNodeName:   nil,
+			WantError:      false,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{},
+		},
+		{
+			Name:         "HandleEmptyInstances",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: nil,
+			WantError:    false,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{},
+				},
+			},
+		},
+		{
+			Name:         "ResistMultipleReservations",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: nil,
+			WantError:    true,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{},
+					&ec2.Reservation{},
+				},
+			},
+		},
+		{
+			Name:         "ResistMultipleInstances",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: nil,
+			WantError:    true,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{
+						Instances: []*ec2.Instance{
+							&ec2.Instance{},
+							&ec2.Instance{},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:         "ValidResponse",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: aws.String("blub"),
+			WantError:    false,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{
+						Instances: []*ec2.Instance{
+							&ec2.Instance{
+								PrivateDnsName: aws.String("blub"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			ec2Mock := &tu.MockEC2Client{
+				ReturnError: tc.EC2ReturnError,
+				ReturnValue: tc.EC2ReturnValue,
+			}
+
+			mh := &MessageHandler{
+				SvcEC2: ec2Mock,
+			}
+
+			haveNodeName, haveError := mh.resolveNodeName(tc.InstanceID)
+
+			if haveError == nil && tc.WantError {
+				t.Errorf("Expected error.")
+			}
+			if haveError != nil && !tc.WantError {
+				t.Errorf("Got unexpeted error: %v", haveError)
+			}
+
+			if haveNodeName != tc.WantNodeName && aws.StringValue(haveNodeName) != aws.StringValue(tc.WantNodeName) {
+				t.Errorf("Asserion failed. Have: %s. Want: %s",
+					aws.StringValue(haveNodeName), aws.StringValue(tc.WantNodeName))
+			}
+
+		})
+	}
+}

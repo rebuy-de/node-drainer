@@ -202,14 +202,18 @@ func (mh *MessageHandler) resolveNodeName(instanceID *string) (*string, error) {
 	if len(out.Reservations) == 0 {
 		return nil, nil
 	}
-	if len(out.Reservations[0].Instances) == 0 {
-		return nil, nil
-	}
 
 	// Sanity check, since an empty instance ID is a wildcard.
 	if len(out.Reservations) > 1 {
 		return nil, fmt.Errorf("Found multiple instances for ID %s", aws.StringValue(instanceID))
 	}
+
+	// Avoid null dereference.
+	if len(out.Reservations[0].Instances) == 0 {
+		return nil, nil
+	}
+
+	// Sanity check, since an empty instance ID is a wildcard.
 	if len(out.Reservations[0].Instances) > 1 {
 		return nil, fmt.Errorf("Found multiple instances for ID %s", aws.StringValue(instanceID))
 	}

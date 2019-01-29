@@ -1,6 +1,9 @@
 package controller
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
+)
 
 type Queue struct {
 	requests []Request
@@ -18,6 +21,11 @@ func NewQueue(gauge prometheus.Gauge) *Queue {
 func (q *Queue) Add(r Request) {
 	defer q.refreshMetrics()
 
+	if q.contains(r.NodeName) {
+		logrus.Debugf("Node %s already in queue.", r.NodeName)
+		return
+	}
+
 	q.requests = append(q.requests, r)
 }
 
@@ -34,6 +42,15 @@ func (q *Queue) Poll() *Request {
 	q.requests = q.requests[1:]
 
 	return &r
+}
+
+func (q *Queue) contains(nodeName string) bool {
+	for _, r := range q.requests {
+		if r.NodeName == nodeName {
+			return true
+		}
+	}
+	return false
 }
 
 func (q *Queue) refreshMetrics() {

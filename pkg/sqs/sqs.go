@@ -3,6 +3,7 @@ package sqs
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	log "github.com/sirupsen/logrus"
 
@@ -68,7 +69,7 @@ func (mh *MessageHandler) Run(ctx context.Context) {
 				QueueUrl:            mh.DrainQueue,
 				MaxNumberOfMessages: aws.Int64(1),
 				VisibilityTimeout:   aws.Int64(10),
-				WaitTimeSeconds:     aws.Int64(30),
+				WaitTimeSeconds:     aws.Int64(20),
 			})
 			if err != nil {
 				log.Error(err)
@@ -105,24 +106,25 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 		}
 
 		if messageASG.AutoScalingGroupName != nil && messageASG.EC2InstanceId != nil {
-			mh.heartbeat(&messageASG)
-			names := mh.mustResolveNodeNames(messageASG.EC2InstanceId)
-			if len(names) == 0 {
-				mh.notifyASG(&messageASG)
+			name := mh.mustResolveNodeName(messageASG.EC2InstanceId)
+			if name == nil {
 				mh.deleteConsumedMessage(messageHandle)
 				continue
 			}
 
-			mh.triggerDrain(names, false)
+			mh.heartbeat(&messageASG)
+			mh.triggerDrain(*name, false, func() {
+				mh.notifyASG(&messageASG)
+			})
 
 		} else if messageSpot.DetailType != nil {
-			names := mh.mustResolveNodeNames(messageSpot.Resources...)
-			if len(names) == 0 {
+			name := mh.mustResolveNodeName(messageSpot.Detail.InstanceId)
+			if name == nil {
 				mh.deleteConsumedMessage(messageHandle)
 				continue
 			}
 
-			mh.triggerDrain(names, true)
+			mh.triggerDrain(*name, true, nil)
 
 		} else {
 			log.Warn("Invalid message received, skipping...")
@@ -134,7 +136,7 @@ func (mh *MessageHandler) handleMessage(msg *sqs.ReceiveMessageOutput) {
 }
 
 func (mh *MessageHandler) heartbeat(msg *util.ASGMessage) {
-	log.Info("Sending ASG heartbeat for instance: " + *msg.EC2InstanceId)
+	log.Infof("Sending ASG heartbeat for instance %s", aws.StringValue(msg.EC2InstanceId))
 
 	input := &autoscaling.RecordLifecycleActionHeartbeatInput{
 		AutoScalingGroupName: msg.AutoScalingGroupName,
@@ -149,25 +151,34 @@ func (mh *MessageHandler) heartbeat(msg *util.ASGMessage) {
 	}
 }
 
-func (mh *MessageHandler) triggerDrain(nodeNames []string, fastpath bool) {
-	for _, nodeName := range nodeNames {
-		mh.Requests <- controller.Request{
-			NodeName: nodeName,
-			Fastpath: fastpath,
-		}
+func (mh *MessageHandler) triggerDrain(nodeName string, fastpath bool, onDone func()) {
+	mh.Requests <- controller.Request{
+		NodeName: nodeName,
+		Fastpath: fastpath,
+		OnDone:   onDone,
 	}
 }
 
-func (mh *MessageHandler) mustResolveNodeNames(instanceIDs ...*string) []string {
-	names, err := mh.resolveNodeNames(instanceIDs...)
+func (mh *MessageHandler) mustResolveNodeName(instanceID *string) *string {
+	name, err := mh.resolveNodeName(instanceID)
 	if err != nil {
 		log.Error(err)
 		cmdutil.Exit(1)
 	}
-	return names
+	return name
 }
 
-func (mh *MessageHandler) resolveNodeNames(instanceIDs ...*string) ([]string, error) {
+func (mh *MessageHandler) resolveNodeName(instanceID *string) (*string, error) {
+	// This indicates an error in either the program code or the AWS API
+	// response. Precautionally return an error.
+	if instanceID == nil {
+		return nil, fmt.Errorf("Cannot resolve nil instance ID")
+	}
+	if *instanceID == "" {
+		return nil, fmt.Errorf("Cannot resolve nil instance ID")
+	}
+
+	// Get Instance from EC2 API.
 	input := &ec2.DescribeInstancesInput{
 		DryRun: aws.Bool(false),
 		Filters: []*ec2.Filter{
@@ -179,7 +190,7 @@ func (mh *MessageHandler) resolveNodeNames(instanceIDs ...*string) ([]string, er
 				},
 			},
 		},
-		InstanceIds: instanceIDs,
+		InstanceIds: []*string{instanceID},
 	}
 
 	out, err := mh.SvcEC2.DescribeInstances(input)
@@ -187,18 +198,30 @@ func (mh *MessageHandler) resolveNodeNames(instanceIDs ...*string) ([]string, er
 		return nil, err
 	}
 
-	names := []string{}
-	for r := range out.Reservations {
-		for i := range out.Reservations[r].Instances {
-			names = append(names, *out.Reservations[r].Instances[i].PrivateDnsName)
-		}
+	// Avoid null dereference.
+	if len(out.Reservations) == 0 {
+		return nil, nil
+	}
+	if len(out.Reservations[0].Instances) == 0 {
+		return nil, nil
 	}
 
-	return names, nil
+	// Sanity check, since an empty instance ID is a wildcard.
+	if len(out.Reservations) > 1 {
+		return nil, fmt.Errorf("Found multiple instances for ID %s", aws.StringValue(instanceID))
+	}
+	if len(out.Reservations[0].Instances) > 1 {
+		return nil, fmt.Errorf("Found multiple instances for ID %s", aws.StringValue(instanceID))
+	}
+
+	name := out.Reservations[0].Instances[0].PrivateDnsName
+	log.Infof("Resolved Instance ID %s to Node Name %s",
+		aws.StringValue(instanceID), aws.StringValue(name))
+	return name, nil
 }
 
 func (mh *MessageHandler) deleteConsumedMessage(receiptHandle *string) {
-	log.Debug("Deleting consumed SQS message: " + *receiptHandle)
+	log.Debugf("Deleting consumed SQS message for handle %s", aws.StringValue(receiptHandle))
 	input := &sqs.DeleteMessageInput{
 		QueueUrl:      mh.DrainQueue,
 		ReceiptHandle: receiptHandle,
@@ -212,7 +235,7 @@ func (mh *MessageHandler) deleteConsumedMessage(receiptHandle *string) {
 }
 
 func (mh *MessageHandler) notifyASG(msg *util.ASGMessage) {
-	log.Debug("Notifying ASG about draining completion for node: " + *msg.EC2InstanceId)
+	log.Debugf("Notifying ASG about draining completion for node %s", aws.StringValue(msg.EC2InstanceId))
 	input := &autoscaling.CompleteLifecycleActionInput{
 		AutoScalingGroupName:  msg.AutoScalingGroupName,
 		InstanceId:            msg.EC2InstanceId,

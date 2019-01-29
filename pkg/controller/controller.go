@@ -90,42 +90,42 @@ func (c *Controller) Reconcile(ctx context.Context) error {
 			// Note: Requests from the backlog should be discardable, since the
 			// messages are persisted in SQS. All other requests are using
 			// fast-path and should be finished when reaching the next loop.
-			logrus.Info("gracefully exiting main loop")
+			logrus.Info("Gracefully exiting main loop")
 			return nil
 
 		case <-ticker.C:
-			logrus.Debug("checking backlog")
+			logrus.Debug("Checking backlog")
 
 			progress := c.inProgress // copying variable to make sure the log message is consistent
 			if progress > 0 {
-				logrus.Debugf("skip processing backlog, because there are still %d drains in progress", progress)
+				logrus.Debugf("Skip processing backlog, because there are still %d drains in progress", progress)
 				continue
 			}
 
 			age := c.clock.Since(c.lastDrain)
 			if age < c.cooldown {
-				logrus.Debugf("skip processing backlog, because last drain was just %v ago", age)
+				logrus.Debugf("Skip processing backlog, because last drain was just %v ago", age)
 				continue
 			}
 
 			request := backlog.Poll()
 			if request == nil {
-				logrus.Debug("backlog is empty")
+				logrus.Debug("Backlog is empty")
 				continue
 			}
 
-			logrus.Infof("draining next node %s from backlog", request.NodeName)
+			logrus.Infof("Draining next node %s from backlog", request.NodeName)
 			c.metricLastActivity.WithLabelValues("drain-backlog").SetToCurrentTime()
 			go c.Drain(*request)
 
 		case request := <-c.requests:
 			if !request.Fastpath {
-				logrus.Infof("adding node %s to the backlog", request.NodeName)
+				logrus.Infof("Adding node %s to the backlog", request.NodeName)
 				backlog.Add(request)
 				continue
 			}
 
-			logrus.Infof("draining node %s using fast-path", request.NodeName)
+			logrus.Infof("Draining node %s using fast-path", request.NodeName)
 			c.metricLastActivity.WithLabelValues("drain-fastpath").SetToCurrentTime()
 			go c.Drain(request)
 		}

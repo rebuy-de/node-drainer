@@ -1,16 +1,21 @@
 package cmd
 
 import (
+	"context"
+	"time"
+
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	awssqs "github.com/aws/aws-sdk-go/service/sqs"
+	log "github.com/sirupsen/logrus"
+	cobra "github.com/spf13/cobra"
+
+	"github.com/rebuy-de/node-drainer/pkg/controller"
 	"github.com/rebuy-de/node-drainer/pkg/drainer"
 	"github.com/rebuy-de/node-drainer/pkg/prom"
 	"github.com/rebuy-de/node-drainer/pkg/sqs"
 	"github.com/rebuy-de/node-drainer/pkg/util"
 	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
-	log "github.com/sirupsen/logrus"
-	cobra "github.com/spf13/cobra"
 )
 
 type NodeDrainer struct {
@@ -19,18 +24,17 @@ type NodeDrainer struct {
 	LogLevel    string
 	QueueURL    string
 	AWSRegion   string
-	SQSWait     int
 	MetricsPort string
-	CoolDown    int
+	CoolDown    time.Duration
 }
 
-func (nd *NodeDrainer) Run(cmd *cobra.Command, args []string) {
+func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	if !nd.Profile.IsValid() {
 		log.Error("incorrect AWS credentials, exiting...")
 		cmdutil.Exit(1)
 	}
 
-	prom.Run(nd.MetricsPort)
+	metricsRegistry := prom.Run(nd.MetricsPort)
 
 	logLevel, err := log.ParseLevel(nd.LogLevel)
 	if err != nil {
@@ -50,14 +54,21 @@ func (nd *NodeDrainer) Run(cmd *cobra.Command, args []string) {
 		cmdutil.Exit(1)
 	}
 
-	drainer := drainer.NewDrainer(util.KubernetesClientset(nd.Kubeconfig))
 	session := nd.Profile.BuildSession(nd.AWSRegion)
 	svcAutoscaling := autoscaling.New(session)
 	svcSqs := awssqs.New(session)
 	svcEc2 := ec2.New(session)
 	queueUrl := util.GetQueueURL(session, url, nd.AWSRegion, nd.Profile)
-	sqs := sqs.NewMessageHandler(drainer, &queueUrl, nd.SQSWait, svcAutoscaling, svcSqs, svcEc2, nd.CoolDown)
-	sqs.Run()
+
+	requests := make(chan controller.Request, 100)
+	drainer := drainer.NewDrainer(util.KubernetesClientset(nd.Kubeconfig))
+
+	sqs := sqs.NewMessageHandler(requests, &queueUrl, svcAutoscaling, svcSqs, svcEc2)
+	ctl := controller.New(drainer, requests, nd.CoolDown)
+	ctl.RegisterMetrics(metricsRegistry)
+
+	go sqs.Run(ctx)
+	cmdutil.Must(ctl.Reconcile(ctx))
 }
 
 func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
@@ -107,17 +118,13 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 		&nd.AWSRegion, "region", "r", "",
 		"AWS region. This argument is mandatory.")
 
-	cmd.PersistentFlags().IntVarP(
-		&nd.SQSWait, "sqs-wait-interval", "w", 10,
-		"Time to wait between successive SQS polling calls, values must be between 0 and 20 (seconds).")
-
 	cmd.PersistentFlags().StringVarP(
 		&nd.MetricsPort, "metrics-port", "m", "8080",
 		"Port on which prometheus `/metrics` will be exposed.")
 
-	cmd.PersistentFlags().IntVarP(
-		&nd.CoolDown, "cool-down", "c", 300,
-		"Time in seconds node-drainer should sleep after draining a node before starting to handle the next one.")
+	cmd.PersistentFlags().DurationVarP(
+		&nd.CoolDown, "cool-down", "c", 10*time.Minute,
+		"Time node-drainer should sleep after draining a node before starting to handle the next one.")
 }
 
 func NewRootCommand() *cobra.Command {

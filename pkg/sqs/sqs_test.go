@@ -9,96 +9,78 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/rebuy-de/node-drainer/pkg/controller"
 	tu "github.com/rebuy-de/node-drainer/pkg/sqs/test_util"
 )
 
 func TestHandleMessage(t *testing.T) {
 	cases := []struct {
-		name                              string
-		message                           *sqs.ReceiveMessageOutput
-		WantDescribeInstancesCalled       bool
-		WantDeleteMessageCalled           bool
-		WantCompleteLifecycleActionCalled bool
-		WantHeartbeatCalled               bool
-		WantDrainCalled                   bool
-		Ec2ReturnValue                    *ec2.DescribeInstancesOutput
+		name                        string
+		message                     *sqs.ReceiveMessageOutput
+		WantDescribeInstancesCalled bool
+		WantDeleteMessageCalled     bool
+		WantHeartbeatCalled         bool
+		WantDrainCalls              int
+		Ec2ReturnValue              *ec2.DescribeInstancesOutput
 	}{
 		{
-			name:                              "no_messages",
-			message:                           &sqs.ReceiveMessageOutput{},
-			WantDescribeInstancesCalled:       false,
-			WantDeleteMessageCalled:           false,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   false,
-			Ec2ReturnValue:                    &ec2.DescribeInstancesOutput{},
+			name:                        "no_messages",
+			message:                     &sqs.ReceiveMessageOutput{},
+			WantDescribeInstancesCalled: false,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              0,
+			Ec2ReturnValue:              &ec2.DescribeInstancesOutput{},
 		},
 		{
-			name:                              "valid_asg_message",
-			message:                           tu.GenerateValidASGMessage(t),
-			WantDescribeInstancesCalled:       true,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: true,
-			WantHeartbeatCalled:               true,
-			WantDrainCalled:                   true,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
+			name:                        "valid_asg_message",
+			message:                     tu.GenerateValidASGMessage(t),
+			WantDescribeInstancesCalled: true,
+			WantHeartbeatCalled:         true,
+			WantDrainCalls:              1,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(false),
 		},
 		{
-			name:                              "valid_spot_message",
-			message:                           tu.GenerateValidSpotMessage(t),
-			WantDescribeInstancesCalled:       true,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   true,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(false),
+			name:                        "valid_spot_message",
+			message:                     tu.GenerateValidSpotMessage(t),
+			WantDescribeInstancesCalled: true,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              1,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(false),
 		},
 		{
-			name:                              "test_message",
-			message:                           tu.GenerateTestMessage(t),
-			WantDescribeInstancesCalled:       false,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   false,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(true),
+			name:                        "test_message",
+			message:                     tu.GenerateTestMessage(t),
+			WantDescribeInstancesCalled: false,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              0,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(true),
 		},
 		{
-			name:                              "invalid_message",
-			message:                           tu.GenerateInvalidMessage(t),
-			WantDescribeInstancesCalled:       false,
-			WantDeleteMessageCalled:           true,
-			WantCompleteLifecycleActionCalled: false,
-			WantHeartbeatCalled:               false,
-			WantDrainCalled:                   false,
-			Ec2ReturnValue:                    tu.GenerateDescribeInstancesOutput(true),
+			name:                        "invalid_message",
+			message:                     tu.GenerateInvalidMessage(t),
+			WantDescribeInstancesCalled: false,
+			WantHeartbeatCalled:         false,
+			WantDrainCalls:              0,
+			Ec2ReturnValue:              tu.GenerateDescribeInstancesOutput(true),
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			drainer, svcAutoscaling, svcSqs, svcEc2 := tu.GenerateMessageHandlerArgs()
-			mh := NewMessageHandler(drainer, aws.String("drainQueue"), 10, svcAutoscaling, svcSqs, svcEc2, 0)
+			requests, svcAutoscaling, svcSqs, svcEc2 := tu.GenerateMessageHandlerArgs()
+			mh := NewMessageHandler(requests, aws.String("drainQueue"), svcAutoscaling, svcSqs, svcEc2)
 			svcEc2.ReturnValue = tc.Ec2ReturnValue
 			mh.handleMessage(tc.message)
 			if svcEc2.WasDescribeInstancesCalled != tc.WantDescribeInstancesCalled {
 				t.Log("WasDescribeInstancesCalled in undesired state: " + strconv.FormatBool(svcEc2.WasDescribeInstancesCalled))
 				t.Fail()
 			}
-			if svcSqs.WasDeleteMessageCalled != tc.WantDeleteMessageCalled {
-				t.Log("WasDeleteMessageCalled in undesired state: " + strconv.FormatBool(svcSqs.WasDeleteMessageCalled))
-				t.Fail()
-			}
-			if svcAutoscaling.WasCompleteLifecycleActionCalled != tc.WantCompleteLifecycleActionCalled {
-				t.Log("WasCompleteLifecycleActionCalled in undesired state: " + strconv.FormatBool(svcAutoscaling.WasCompleteLifecycleActionCalled))
-				t.Fail()
-			}
 			if svcAutoscaling.WasHeartbeatCalled != tc.WantHeartbeatCalled {
 				t.Log("WasHeartbeatCalled in undesired state: " + strconv.FormatBool(svcAutoscaling.WasHeartbeatCalled))
 				t.Fail()
 			}
-			if drainer.WasDrainCalled != tc.WantDrainCalled {
-				t.Log("WasDrainCalled in undesired state: " + strconv.FormatBool(drainer.WasDrainCalled))
+			if len(requests) != tc.WantDrainCalls {
+				t.Logf("WasDrainCalls in undesired state: %d", len(requests))
 				t.Fail()
 			}
 		})
@@ -108,7 +90,7 @@ func TestHandleMessage(t *testing.T) {
 func TestNotifyASG(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	autscalingSvc := tu.NewMockAutoScalingClient(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
+	mh := NewMessageHandler(make(chan controller.Request, 10), aws.String("drainQueue"), autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false))
 
 	cases := []struct {
 		name      string
@@ -142,7 +124,7 @@ func TestNotifyASG(t *testing.T) {
 func TestHeartbeat(t *testing.T) {
 	message := tu.GeneratePlainMessage()
 	autscalingSvc := tu.NewMockAutoScalingClient(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false), 0)
+	mh := NewMessageHandler(make(chan controller.Request, 10), aws.String("drainQueue"), autscalingSvc, tu.NewMockSQSClient(false), tu.NewMockEC2Client(false))
 
 	cases := []struct {
 		name      string
@@ -173,77 +155,10 @@ func TestHeartbeat(t *testing.T) {
 	}
 }
 
-func TestTriggerDrain(t *testing.T) {
-	message := tu.GeneratePlainMessage()
-	ec2Svc := tu.NewMockEC2Client(false)
-	mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc, 0)
-
-	cases := []struct {
-		name      string
-		callFails bool
-		want      bool
-	}{
-		{
-			name:      "drain_succeeds",
-			callFails: false,
-			want:      true,
-		},
-		{
-			name:      "drain_fails",
-			callFails: true,
-			want:      true,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			ec2Svc.ReturnError = tc.callFails
-			mh.triggerDrain(message.EC2InstanceId)
-			have := ec2Svc.WasDescribeInstancesCalled
-			if have != tc.want {
-				t.Fail()
-			}
-		})
-	}
-}
-func TestTriggerDrainCount(t *testing.T) {
-	message := tu.GeneratePlainMessage()
-	ec2Svc := tu.NewMockEC2Client(false)
-	md := tu.NewMockDrainer()
-	mh := NewMessageHandler(md, aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), tu.NewMockSQSClient(false), ec2Svc, 0)
-	cases := []struct {
-		name    string
-		ec2Conf *ec2.DescribeInstancesOutput
-		want    []string
-	}{
-		{
-			name:    "drain_nothing",
-			ec2Conf: tu.GenerateDescribeInstancesOutput(false),
-			want:    []string{},
-		},
-		{
-			name:    "drain_node",
-			ec2Conf: tu.GenerateDescribeInstancesOutput(true),
-			want:    []string{"instance"},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			mh.triggerDrain(message.EC2InstanceId)
-			ec2Svc.ReturnValue = tc.ec2Conf
-			have := md.Names
-			if len(have) != len(tc.want) {
-				t.Fail()
-			}
-		})
-	}
-}
-
 func TestDeleteConsumedMessage(t *testing.T) {
 	if os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "crash" || os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "nocrash" {
 		sqsSvc := tu.NewMockSQSClient(false)
-		mh := NewMessageHandler(tu.NewMockDrainer(), aws.String("drainQueue"), 10, tu.NewMockAutoScalingClient(false), sqsSvc, tu.NewMockEC2Client(false), 0)
+		mh := NewMessageHandler(make(chan controller.Request, 10), aws.String("drainQueue"), tu.NewMockAutoScalingClient(false), sqsSvc, tu.NewMockEC2Client(false))
 		if os.Getenv("TEST_DELETECONSUMEDMESSAGE") == "crash" {
 			sqsSvc.ReturnError = true
 			mh.deleteConsumedMessage(aws.String(""))
@@ -286,6 +201,121 @@ func TestDeleteConsumedMessage(t *testing.T) {
 			if have != tc.want {
 				t.Fail()
 			}
+		})
+	}
+}
+
+func TestResolveNodeName(t *testing.T) {
+	cases := []struct {
+		Name           string
+		InstanceID     *string
+		EC2ReturnError bool
+		EC2ReturnValue *ec2.DescribeInstancesOutput
+		WantNodeName   *string
+		WantError      bool
+	}{
+		{
+			Name:         "ResistNilInstance",
+			InstanceID:   nil,
+			WantNodeName: nil,
+			WantError:    true,
+		},
+		{
+			Name:         "ResistEmptyInstance",
+			InstanceID:   aws.String(""),
+			WantNodeName: nil,
+			WantError:    true,
+		},
+		{
+			Name:           "HandleEmptyReservations",
+			InstanceID:     aws.String("i-000"),
+			WantNodeName:   nil,
+			WantError:      false,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{},
+		},
+		{
+			Name:         "HandleEmptyInstances",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: nil,
+			WantError:    false,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{},
+				},
+			},
+		},
+		{
+			Name:         "ResistMultipleReservations",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: nil,
+			WantError:    true,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{},
+					&ec2.Reservation{},
+				},
+			},
+		},
+		{
+			Name:         "ResistMultipleInstances",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: nil,
+			WantError:    true,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{
+						Instances: []*ec2.Instance{
+							&ec2.Instance{},
+							&ec2.Instance{},
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:         "ValidResponse",
+			InstanceID:   aws.String("i-000"),
+			WantNodeName: aws.String("blub"),
+			WantError:    false,
+			EC2ReturnValue: &ec2.DescribeInstancesOutput{
+				Reservations: []*ec2.Reservation{
+					&ec2.Reservation{
+						Instances: []*ec2.Instance{
+							&ec2.Instance{
+								PrivateDnsName: aws.String("blub"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			ec2Mock := &tu.MockEC2Client{
+				ReturnError: tc.EC2ReturnError,
+				ReturnValue: tc.EC2ReturnValue,
+			}
+
+			mh := &MessageHandler{
+				SvcEC2: ec2Mock,
+			}
+
+			haveNodeName, haveError := mh.resolveNodeName(tc.InstanceID)
+
+			if haveError == nil && tc.WantError {
+				t.Errorf("Expected error.")
+			}
+			if haveError != nil && !tc.WantError {
+				t.Errorf("Got unexpeted error: %v", haveError)
+			}
+
+			if haveNodeName != tc.WantNodeName && aws.StringValue(haveNodeName) != aws.StringValue(tc.WantNodeName) {
+				t.Errorf("Asserion failed. Have: %s. Want: %s",
+					aws.StringValue(haveNodeName), aws.StringValue(tc.WantNodeName))
+			}
+
 		})
 	}
 }

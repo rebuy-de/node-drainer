@@ -45,9 +45,9 @@ type SpotMessage struct {
 	Region     *string
 	Resources  []*string
 	Detail     struct {
-		InstanceId     *string
-		InstanceAction *string
-	}
+		InstanceId     *string `json:"instance-id"`
+		InstanceAction *string `json:"instance-action"`
+	} `json:"detail"`
 }
 
 func (c *AWSProfile) BuildSession(region string) *session.Session {

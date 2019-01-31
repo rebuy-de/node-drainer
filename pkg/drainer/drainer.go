@@ -5,15 +5,31 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/rebuy-de/node-drainer/pkg/prom"
-	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/rebuy-de/node-drainer/pkg/prom"
+	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 )
+
+type ErrNodeNotAvailable string
+
+func (err ErrNodeNotAvailable) Error() string {
+	return fmt.Sprintf("node %s not available, skipping draining...", err)
+}
+
+func IsErrNodeNotAvailable(err error) bool {
+	_, ok := err.(ErrNodeNotAvailable)
+	if ok {
+		return true
+	}
+
+	return false
+}
 
 type Drainer struct {
 	Clientset     kubernetes.Interface
@@ -46,11 +62,10 @@ func NewDrainer(clientset kubernetes.Interface) *Drainer {
 func (d *Drainer) Drain(nodeName string) error {
 	n := d.node(nodeName)
 	if n == nil {
-		log.Info("node " + nodeName + " not available, skipping draining...")
-		return fmt.Errorf("node " + nodeName + " not available, skipping draining...")
+		return ErrNodeNotAvailable(nodeName)
 	}
 
-	log.Info("draining: ", n.GetName())
+	log.Infof("Draining node %s", n.GetName())
 
 	start := time.Now()
 
@@ -66,10 +81,10 @@ func (d *Drainer) Drain(nodeName string) error {
 	d.evictAllPods(n)
 
 	for d.getRemainingPodCount(n) > 0 {
-		log.Debug("remaining pod count:", d.getRemainingPodCount(n))
+		log.Debug("Remaining pod count:", d.getRemainingPodCount(n))
 		time.Sleep(time.Duration(1) * time.Second)
 	}
-	log.Info("finished draining: ", n.GetName())
+	log.Infof("Finished draining node %s", n.GetName())
 
 	prom.M.SetLastEvictionDuration(time.Since(start).Seconds())
 	return nil
@@ -77,7 +92,7 @@ func (d *Drainer) Drain(nodeName string) error {
 
 func (d *Drainer) node(nodeName string) *v1.Node {
 	if nodeName == "" {
-		log.Warn("empty node name string, skipping...")
+		log.Warn("Empty node name string, skipping...")
 		return nil
 	}
 	var err error
@@ -137,7 +152,7 @@ func (d *Drainer) evictAllPods(node *v1.Node) {
 	}
 
 	if evictions == 0 {
-		log.Info("no pods to evict on node: ", node.GetName())
+		log.Infof("No pods to evict on node %s", node.GetName())
 	}
 }
 
@@ -147,7 +162,7 @@ func (d *Drainer) evict(eviction *policyv1beta1.Eviction) {
 		retries    = 0
 	)
 	for d.Clientset.PolicyV1beta1().Evictions(eviction.GetNamespace()).Evict(eviction) != nil {
-		log.Debug("failed to trigger eviction for " + eviction.GetName() + ", retrying...")
+		log.Debug("Failed to trigger eviction for " + eviction.GetName() + ", retrying...")
 		if d.Wait == true {
 			time.Sleep(time.Duration(1) * time.Second)
 		}
@@ -156,7 +171,7 @@ func (d *Drainer) evict(eviction *policyv1beta1.Eviction) {
 			cmdutil.Exit(1)
 		}
 	}
-	log.Info("eviction triggered: " + eviction.GetName())
+	log.Info("Eviction triggered: " + eviction.GetName())
 }
 
 func (d *Drainer) getRemainingPodCount(node *v1.Node) int {

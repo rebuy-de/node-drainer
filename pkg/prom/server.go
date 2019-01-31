@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(port string) {
+func Run(port string) *prometheus.Registry {
 	r := prometheus.NewRegistry()
 	r.MustRegister(M.EvictedPods)
 	r.MustRegister(M.LastEvictionDuration)
@@ -19,4 +19,6 @@ func Run(port string) {
 	go func() {
 		logrus.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 	}()
+
+	return r
 }

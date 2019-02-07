@@ -24,15 +24,22 @@ type NodeDrainer struct {
 	LogLevel    string
 	QueueURL    string
 	AWSRegion   string
+	VaultServer string
 	MetricsPort string
 	CoolDown    time.Duration
 }
 
 func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []string) {
-	if !nd.Profile.IsValid() {
-		log.Error("incorrect AWS credentials, exiting...")
+	if nd.VaultServer == "" {
+		log.Error("No vault server specified, exiting...")
 		cmdutil.Exit(1)
 	}
+
+	*nd.Profile, _ = util.GenerateAWSCredentials(nd.VaultServer)
+	// if err != nil {
+	// 	log.Error("Couldn't get credentials from vault...\n" + err.Error())
+	// 	cmdutil.Exit(1)
+	// }
 
 	metricsRegistry := prom.Run(nd.MetricsPort)
 
@@ -77,36 +84,6 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 		"Location of the kubeconfig file for local deployment.")
 
 	cmd.PersistentFlags().StringVarP(
-		&nd.Profile.Profile, "profile", "p", "",
-		"Name of the AWS profile name for accessing the AWS API. "+
-			"Cannot be used together with --access-key-id, --secret-access-key, "+
-			"--ec2-role-provider and --session-token.")
-
-	cmd.PersistentFlags().StringVar(
-		&nd.Profile.AccessKeyID, "access-key-id", "",
-		"AWS access key ID for accessing the AWS API. "+
-			"Must be used together with --secret-access-key."+
-			"Cannot be used together with --profile or --ec2-role-provider.")
-
-	cmd.PersistentFlags().StringVar(
-		&nd.Profile.SecretAccessKey, "secret-access-key", "",
-		"AWS secret access key for accessing the AWS API. "+
-			"Must be used together with --access-key-id."+
-			"Cannot be used together with --profile or --ec2-role-provider.")
-
-	cmd.PersistentFlags().StringVar(
-		&nd.Profile.SessionToken, "session-token", "",
-		"AWS session token for accessing the AWS API. "+
-			"Must be used together with --access-key-id and --secret-access-key."+
-			"Cannot be used together with --profile or --ec2-role-provider.")
-
-	cmd.PersistentFlags().BoolVar(
-		&nd.Profile.EC2RoleProvider, "ec2-role-provider", false,
-		"AWS session via EC2 Roles. "+
-			"Cannot be used together with --access-key-id, --secret-access-key, --profile "+
-			"and --session-token.")
-
-	cmd.PersistentFlags().StringVarP(
 		&nd.LogLevel, "log-level", "l", "info",
 		"Log level. Defults to info.")
 
@@ -117,6 +94,10 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(
 		&nd.AWSRegion, "region", "r", "",
 		"AWS region. This argument is mandatory.")
+
+	cmd.PersistentFlags().StringVar(
+		&nd.VaultServer, "vault", "",
+		"Vault server address. This argument is mandatory.")
 
 	cmd.PersistentFlags().StringVarP(
 		&nd.MetricsPort, "metrics-port", "m", "8080",

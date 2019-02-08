@@ -30,19 +30,6 @@ type NodeDrainer struct {
 }
 
 func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []string) {
-	if nd.VaultServer == "" {
-		log.Error("No vault server specified, exiting...")
-		cmdutil.Exit(1)
-	}
-
-	*nd.Profile, _ = util.GenerateAWSCredentials(nd.VaultServer)
-	// if err != nil {
-	// 	log.Error("Couldn't get credentials from vault...\n" + err.Error())
-	// 	cmdutil.Exit(1)
-	// }
-
-	metricsRegistry := prom.Run(nd.MetricsPort)
-
 	logLevel, err := log.ParseLevel(nd.LogLevel)
 	if err != nil {
 		log.Error("incorrect log level set, exiting...\n" + err.Error())
@@ -50,16 +37,33 @@ func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []strin
 	}
 	log.SetLevel(logLevel)
 
-	if nd.QueueURL == "" {
-		log.Error("no SQS url specified, exiting...")
+	if nd.VaultServer == "" {
+		log.Error("No vault server specified, exiting...")
 		cmdutil.Exit(1)
 	}
-	url := nd.QueueURL
 
 	if nd.AWSRegion == "" {
 		log.Error("no AWS region specified, exiting...")
 		cmdutil.Exit(1)
 	}
+
+	profile, err := util.GenerateAWSCredentials(nd.VaultServer)
+	if err != nil {
+		log.Error("Couldn't get credentials from vault...\n" + err.Error())
+		cmdutil.Exit(1)
+	}
+
+	nd.Profile = &profile
+	log.Debugf("Sleeping for %d seconds", 10)
+	time.Sleep(10 * time.Second)
+
+	metricsRegistry := prom.Run(nd.MetricsPort)
+
+	if nd.QueueURL == "" {
+		log.Error("no SQS url specified, exiting...")
+		cmdutil.Exit(1)
+	}
+	url := nd.QueueURL
 
 	session := nd.Profile.BuildSession(nd.AWSRegion)
 	svcAutoscaling := autoscaling.New(session)

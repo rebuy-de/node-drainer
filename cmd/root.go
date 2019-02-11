@@ -4,9 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	awssqs "github.com/aws/aws-sdk-go/service/sqs"
 	log "github.com/sirupsen/logrus"
 	cobra "github.com/spf13/cobra"
 
@@ -32,7 +29,7 @@ type NodeDrainer struct {
 func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	logLevel, err := log.ParseLevel(nd.LogLevel)
 	if err != nil {
-		log.Error("incorrect log level set, exiting...\n" + err.Error())
+		log.Error("incorrect log level set, exiting..." + err.Error())
 		cmdutil.Exit(1)
 	}
 	log.SetLevel(logLevel)
@@ -47,38 +44,55 @@ func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []strin
 		cmdutil.Exit(1)
 	}
 
-	profile, err := util.GenerateAWSCredentials(nd.VaultServer)
-	if err != nil {
-		log.Error("Couldn't get credentials from vault...\n" + err.Error())
+	if nd.QueueURL == "" {
+		log.Error("no SQS url specified, exiting...")
 		cmdutil.Exit(1)
 	}
 
-	nd.Profile = &profile
+	vaultClient, vaultSecret, err := util.FetchVaultClient(nd.VaultServer)
+	if err != nil {
+		log.Error("Couldn't get token from vault..." + err.Error())
+		cmdutil.Exit(1)
+	}
+	_, err = util.CreateVaultRenewer(vaultClient, vaultSecret)
+	if err != nil {
+		log.Error("Couldn't setup renewer for vault..." + err.Error())
+		cmdutil.Exit(1)
+	}
+	profile, leaseDuration, err := util.GenerateAWSCredentials(vaultClient)
+	if err != nil {
+		log.Error("Couldn't get credentials from vault..." + err.Error())
+		cmdutil.Exit(1)
+	}
+
 	log.Debugf("Sleeping for %d seconds", 10)
 	time.Sleep(10 * time.Second)
 
 	metricsRegistry := prom.Run(nd.MetricsPort)
 
-	if nd.QueueURL == "" {
-		log.Error("no SQS url specified, exiting...")
-		cmdutil.Exit(1)
-	}
-	url := nd.QueueURL
-
-	session := nd.Profile.BuildSession(nd.AWSRegion)
-	svcAutoscaling := autoscaling.New(session)
-	svcSqs := awssqs.New(session)
-	svcEc2 := ec2.New(session)
-	queueUrl := util.GetQueueURL(session, url, nd.AWSRegion, nd.Profile)
-
 	requests := make(chan controller.Request, 100)
 	drainer := drainer.NewDrainer(util.KubernetesClientset(nd.Kubeconfig))
 
-	sqs := sqs.NewMessageHandler(requests, &queueUrl, svcAutoscaling, svcSqs, svcEc2)
+	messageHandler := sqs.NewMessageHandler(requests)
+	messageHandler.UpdateCredentials(profile, nd.AWSRegion, nd.QueueURL)
 	ctl := controller.New(drainer, requests, nd.CoolDown)
 	ctl.RegisterMetrics(metricsRegistry)
 
-	go sqs.Run(ctx)
+	credentialTicker := time.NewTicker(time.Duration(leaseDuration-120) * time.Second)
+	go func() {
+		for range credentialTicker.C {
+			profile, _, err := util.GenerateAWSCredentials(vaultClient)
+			if err != nil {
+				log.Error("Couldn't get credentials from vault..." + err.Error())
+				cmdutil.Exit(1)
+			}
+			log.Debugf("Renewed AWS credentials, setting in %d seconds", 10)
+			time.Sleep(10 * time.Second)
+			messageHandler.UpdateCredentials(profile, nd.AWSRegion, nd.QueueURL)
+		}
+	}()
+
+	go messageHandler.Run(ctx)
 	cmdutil.Must(ctl.Reconcile(ctx))
 }
 

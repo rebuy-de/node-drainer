@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ec2/ec2iface"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	awssqs "github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/aws/aws-sdk-go/service/sqs/sqsiface"
 
 	"github.com/rebuy-de/node-drainer/pkg/controller"
@@ -41,14 +42,20 @@ type Message struct {
 	LifecycleActionToken *string
 }
 
-func NewMessageHandler(requests chan controller.Request, drainQueue *string, svcAutoscaling autoscalingiface.AutoScalingAPI, svcSQS sqsiface.SQSAPI, svcEC2 ec2iface.EC2API) *MessageHandler {
+func NewMessageHandler(requests chan controller.Request) *MessageHandler {
 	return &MessageHandler{
-		Requests:       requests,
-		DrainQueue:     drainQueue,
-		SvcAutoscaling: svcAutoscaling,
-		SvcSQS:         svcSQS,
-		SvcEC2:         svcEC2,
+		Requests: requests,
 	}
+}
+
+func (mh *MessageHandler) UpdateCredentials(profile util.AWSProfile, region string, url string) {
+	session := profile.BuildSession(region)
+	queueUrl := util.GetQueueURL(session, url, region, &profile)
+
+	mh.DrainQueue = &queueUrl
+	mh.SvcAutoscaling = autoscaling.New(session)
+	mh.SvcEC2 = ec2.New(session)
+	mh.SvcSQS = awssqs.New(session)
 }
 
 func (mh *MessageHandler) Run(ctx context.Context) {

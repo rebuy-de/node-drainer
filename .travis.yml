@@ -12,10 +12,10 @@ script:
   --name node-drainer
   --entrypoint "sh"
   -e CGO_ENABLED=0
-  --workdir "/go/src/github.com/rebuy-de/node-drainer"
+  --workdir "/src"
   node-drainer
-  -euxc "make xc && mkdir releases && mv node-drainer-* releases"
-- docker cp -L node-drainer:/go/src/github.com/rebuy-de/node-drainer/releases ./releases
+  -euxc "make xc && mkdir releases && mv dist/node-drainer-* releases"
+- docker cp -L node-drainer:/src/releases ./releases
 - ls -l *
 
 deploy:

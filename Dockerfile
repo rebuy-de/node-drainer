@@ -1,26 +1,30 @@
 # Source: https://github.com/rebuy-de/golang-template
-# Version: 2.0.4-snapshot
 
 FROM golang:1.12-alpine as builder
-RUN apk add --no-cache git make
+
+RUN apk add --no-cache git make curl openssl
 
 # Configure Go
-ENV GOPATH /go
-ENV PATH /go/bin:$PATH
+ENV GOPATH=/go PATH=/go/bin:$PATH CGO_ENABLED=0 GO111MODULE=on
 RUN mkdir -p ${GOPATH}/src ${GOPATH}/bin
 
 # Install Go Tools
-RUN go get -u golang.org/x/lint/golint
-RUN go get -u github.com/golang/dep/cmd/dep
+RUN GO111MODULE= go get -u golang.org/x/lint/golint
 
-COPY . /go/src/github.com/rebuy-de/node-drainer
-WORKDIR /go/src/github.com/rebuy-de/node-drainer
-RUN CGO_ENABLED=0 make install
+COPY . /src
+WORKDIR /src
+RUN set -x \
+ && make test \
+ && make build \
+ && cp --dereference /src/dist/* /usr/local/bin/
+
+RUN set -x \
+ && node-drainer version
 
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /go/bin/node-drainer /usr/local/bin/
+COPY --from=builder /usr/local/bin/* /usr/local/bin/
 
 RUN adduser -D node-drainer
 USER node-drainer

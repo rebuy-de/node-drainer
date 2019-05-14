@@ -19,29 +19,44 @@ import (
 )
 
 type NodeDrainer struct {
-	Kubeconfig  string
-	Profile     *util.AWSProfile
-	LogLevel    string
-	QueueURL    string
 	AWSRegion   string
-	MetricsPort string
 	CoolDown    time.Duration
+	Kubeconfig  string
+	LogLevel    string
+	MetricsPort string
+	Profile     *util.AWSProfile
+	QueueURL    string
+	VaultServer string
 }
 
 func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []string) {
-	if !nd.Profile.IsValid() {
-		log.Error("incorrect AWS credentials, exiting...")
-		cmdutil.Exit(1)
-	}
-
-	metricsRegistry := prom.Run(nd.MetricsPort)
-
 	logLevel, err := log.ParseLevel(nd.LogLevel)
 	if err != nil {
 		log.Error("incorrect log level set, exiting...\n" + err.Error())
 		cmdutil.Exit(1)
 	}
 	log.SetLevel(logLevel)
+
+	if nd.VaultServer != "" {
+		log.Debugf("Getting credentials from vault at %s", nd.VaultServer)
+		vaultClient, _, err := util.FetchVaultClient(nd.VaultServer)
+		if err != nil {
+			log.Error("Couldn't get token from vault..." + err.Error())
+			cmdutil.Exit(1)
+		}
+		*nd.Profile, err = util.FetchAWSCredentials(vaultClient)
+		if err != nil {
+			log.Error("Couldn't get AWS credentials from vault..." + err.Error())
+			cmdutil.Exit(1)
+		}
+	}
+
+	if !nd.Profile.IsValid() {
+		log.Error("incorrect AWS credentials, exiting...")
+		cmdutil.Exit(1)
+	}
+
+	metricsRegistry := prom.Run(nd.MetricsPort)
 
 	if nd.QueueURL == "" {
 		log.Error("no SQS url specified, exiting...")
@@ -125,6 +140,10 @@ func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
 	cmd.PersistentFlags().DurationVarP(
 		&nd.CoolDown, "cool-down", "c", 10*time.Minute,
 		"Time node-drainer should sleep after draining a node before starting to handle the next one.")
+
+	cmd.PersistentFlags().StringVar(
+		&nd.VaultServer, "vault", "",
+		"Vault server address for k8s auth. Cannot be used with AWS credentials or profiles.")
 }
 
 func NewRootCommand() *cobra.Command {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiv1beta1 "k8s.io/api/policy/v1beta1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -198,6 +198,11 @@ func (c *Evictions) Evict(eviction *apiv1beta1.Eviction) error {
 
 	if c.Tries >= len(c.EvictSuccess) {
 		c.T.Fail()
+	}
+
+	if c.Tries >= len(c.EvictSuccess) {
+		c.T.Fatalf("Mock did not define an eviction result for try %d", c.Tries)
+		return nil
 	}
 
 	if c.EvictSuccess[c.Tries] == true {

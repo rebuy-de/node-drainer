@@ -24,6 +24,7 @@ require (
 	github.com/rebuy-de/rebuy-go-sdk v1.6.0
 	github.com/sirupsen/logrus v1.4.1
 	github.com/spf13/cobra v0.0.3
+	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/api v0.0.0-20180510142701-9273ee02527c
 	k8s.io/apimachinery v0.0.0-20180510142256-21efb2924c7c

@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	tu "github.com/rebuy-de/node-drainer/pkg/drainer/test_util"
-	"k8s.io/api/core/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -198,7 +198,6 @@ func TestEvictAllPods(t *testing.T) {
 	resultOne := tu.GeneratePodList(1, "matching", 0)
 	resultMany := tu.GeneratePodList(4, "matching", 0)
 	resultNone := tu.GeneratePodList(2, "nonmatching", 0)
-	resultSome := tu.GeneratePodList(2, "matching", 1)
 
 	node := v1.Node{}
 	node.SetName("matching")
@@ -234,14 +233,6 @@ func TestEvictAllPods(t *testing.T) {
 			evictionSuccess: []bool{},
 			err:             nil,
 			wantEvictCalled: false,
-		},
-		{
-			name:            "some_with_toleration",
-			node:            &node,
-			podList:         resultSome,
-			evictionSuccess: []bool{true},
-			err:             nil,
-			wantEvictCalled: true,
 		},
 	}
 
@@ -345,33 +336,6 @@ func TestGetRemainingPodCount(t *testing.T) {
 	}
 }
 
-func TestEvictCrash(t *testing.T) {
-	if os.Getenv("TEST_EVICTCRASH") == "crash" {
-		clientset, policy, _, _, _ := tu.GenerateMocks()
-		drainer := NewDrainer(clientset)
-		drainer.Wait = false
-
-		evictions := tu.NewEvictions(policy, "default", t)
-		policy.EvictionsItem = evictions
-		evictions.EvictSuccess = []bool{false, false, false, false, false, false, false, false, false, false}
-		drainer.evict(&policyv1beta1.Eviction{})
-		return
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=TestEvictCrash")
-	cmd.Env = append(os.Environ(), "TEST_EVICTCRASH=crash")
-	err := cmd.Run()
-	var have bool
-	if err == nil {
-		have = true
-	} else {
-		have = false
-	}
-	if have != false {
-		t.Fail()
-	}
-}
-
 func TestEvict(t *testing.T) {
 	clientset, policy, _, _, _ := tu.GenerateMocks()
 	drainer := NewDrainer(clientset)
@@ -401,7 +365,7 @@ func TestEvict(t *testing.T) {
 			evictions.Tries = 0
 			evictions.EvictCalled = false
 			evictions.EvictSuccess = tc.successes
-			drainer.evict(&policyv1beta1.Eviction{})
+			drainer.evict(corev1.Pod{})
 			have := evictions.EvictCalled
 			if have != tc.want {
 				t.Fail()

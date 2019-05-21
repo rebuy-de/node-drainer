@@ -23,11 +23,11 @@ type Drainer struct {
 	States map[string]string
 }
 
-func (d *Drainer) Drain(id string) error {
+func (d *Drainer) Drain(id string) (int, error) {
 	d.States[id] = DrainStateInProgress
 	d.Clock.Sleep(d.DrainDuration)
 	d.States[id] = DrainStateDone
-	return nil
+	return 1, nil
 }
 
 func (d *Drainer) assertState(t *testing.T, wantState string, want string) {

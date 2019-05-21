@@ -6,10 +6,11 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes"
 
 	corev1 "k8s.io/api/core/v1"
@@ -62,10 +63,10 @@ func NewDrainer(clientset kubernetes.Interface) *Drainer {
 	}
 }
 
-func (d *Drainer) Drain(nodeName string) error {
+func (d *Drainer) Drain(nodeName string) (int, error) {
 	n := d.node(nodeName)
 	if n == nil {
-		return ErrNodeNotAvailable(nodeName)
+		return 0, ErrNodeNotAvailable(nodeName)
 	}
 
 	log.Infof("Draining node %s", n.GetName())
@@ -76,21 +77,23 @@ func (d *Drainer) Drain(nodeName string) error {
 		n.Spec.Taints = append(n.Spec.Taints, *d.TaintShutdown)
 		_, err := d.Clientset.Core().Nodes().Update(n)
 		if err != nil {
-			log.Error(err)
-			return err
+			return 0, errors.Wrap(err, "failed to update node")
 		}
 	}
 
-	d.evictAllPods(n)
+	evicted, err := d.evictAllPods(n)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to evict Pods")
+	}
 
 	for d.getRemainingPodCount(n) > 0 {
 		log.Debug("Remaining pod count:", d.getRemainingPodCount(n))
-		time.Sleep(time.Duration(1) * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 	log.Infof("Finished draining node %s", n.GetName())
 
 	prom.M.SetLastEvictionDuration(time.Since(start).Seconds())
-	return nil
+	return evicted, nil
 }
 
 func (d *Drainer) node(nodeName string) *corev1.Node {
@@ -104,7 +107,7 @@ func (d *Drainer) node(nodeName string) *corev1.Node {
 	n, err = d.Clientset.CoreV1().Nodes().Get(nodeName, opts)
 	if err != nil {
 		switch err.(type) {
-		case *errors.StatusError:
+		case *kerrors.StatusError:
 			log.Warn(err)
 			return nil
 		case *url.Error:
@@ -125,7 +128,7 @@ func (d *Drainer) hasShutdownTaint(taints []corev1.Taint) bool {
 	return false
 }
 
-func (d *Drainer) evictAllPods(node *corev1.Node) {
+func (d *Drainer) evictAllPods(node *corev1.Node) (int, error) {
 	var (
 		evictions int
 		lo        metav1.ListOptions
@@ -133,22 +136,28 @@ func (d *Drainer) evictAllPods(node *corev1.Node) {
 
 	pods, err := d.Clientset.CoreV1().Pods("").List(lo)
 	if err != nil {
-		log.Error(err)
-		cmdutil.Exit(1)
+		return 0, errors.Wrap(err, "Failed to list Pods")
 	}
 
 	eg, _ := errgroup.WithContext(context.Background())
 
 	for _, pod := range pods.Items {
+		// Workaround, because otherwise Go would not scope `pod` into the loop
+		// and overwrite it in the next iteration.
+		// See https://golang.org/doc/faq#closures_and_goroutines
+		pod := pod
+
 		if pod.Spec.NodeName != node.GetName() {
 			// Pod is actually not on draining node.
 			continue
 		}
 
-		// Workaround, because otherwise Go would not scope `pod` into the loop
-		// and overwrite it in the next iteration.
-		// See https://golang.org/doc/faq#closures_and_goroutines
-		pod := pod
+		if d.podHasInitToleration(pod.Spec.Tolerations) {
+			// Skip critical Pods, like kube-proxy and kube-dns DaemonSets.
+			log.WithField("Pod", pod.GetName()).
+				Info("Pod has toleration and will not get drained.")
+			continue
+		}
 
 		eg.Go(func() error { return d.evict(pod) })
 		evictions = evictions + 1
@@ -157,12 +166,11 @@ func (d *Drainer) evictAllPods(node *corev1.Node) {
 
 	err = eg.Wait()
 	if err != nil {
-		log.Errorf("Node eviction for node %s failed: %v", node.GetName(), err)
-		log.Warnf("Calling for help by dying...")
-		cmdutil.Exit(1)
+		return 0, errors.Wrapf(err, "eviction for Node %s failed", node.GetName())
 	}
 
 	log.Infof("Evicted %d Pods on Node %s", evictions, node.GetName())
+	return evictions, nil
 }
 
 func (d *Drainer) evict(pod corev1.Pod) error {
@@ -174,12 +182,6 @@ func (d *Drainer) evict(pod corev1.Pod) error {
 
 		l = log.WithField("Pod", pod.GetName())
 	)
-
-	if d.podHasInitToleration(pod.Spec.Tolerations) {
-		// Skip critical Pods, like kube-proxy and kube-dns DaemonSets.
-		l.Info("Pod has toleration and will not get drained.")
-		return nil
-	}
 
 	eviction := &policyv1beta1.Eviction{
 		ObjectMeta: metav1.ObjectMeta{

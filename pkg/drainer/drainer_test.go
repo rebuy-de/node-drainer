@@ -2,14 +2,13 @@ package drainer
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
 	"testing"
 
 	tu "github.com/rebuy-de/node-drainer/pkg/drainer/test_util"
-	"k8s.io/api/core/v1"
-	policyv1beta1 "k8s.io/api/policy/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -39,7 +38,7 @@ func TestDrain(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			nodes.SetupGet(tc.nodeReturn, nil)
-			err := drainer.Drain(tc.nodeName)
+			_, err := drainer.Drain(tc.nodeName)
 			var have bool
 			if err == nil {
 				have = true
@@ -50,29 +49,6 @@ func TestDrain(t *testing.T) {
 				t.Fail()
 			}
 		})
-	}
-}
-
-func TestNodeCrash(t *testing.T) {
-	if os.Getenv("TEST_NODECRASH") == "crash" {
-		clientset, _, _, _, nodes := tu.GenerateMocks()
-		drainer := NewDrainer(clientset)
-
-		ers := &url.Error{
-			Op:  "",
-			URL: "",
-			Err: fmt.Errorf("Error"),
-		}
-		nodes.SetupGet(nil, ers)
-		drainer.node("name")
-		return
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=TestNodeCrash")
-	cmd.Env = append(os.Environ(), "TEST_NODECRASH=crash")
-	err := cmd.Run()
-	if err == nil {
-		t.Fail()
 	}
 }
 
@@ -170,35 +146,10 @@ func TestHasShutdownTaint(t *testing.T) {
 	}
 }
 
-func TestEvictAllPodsCrash(t *testing.T) {
-	if os.Getenv("TEST_EVICTALLPODSCRASH") == "crash" {
-		clientset, _, _, pods, _ := tu.GenerateMocks()
-		drainer := NewDrainer(clientset)
-
-		pods.SetupList(nil, fmt.Errorf("New Error"))
-		drainer.evictAllPods(&v1.Node{})
-		return
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=TestEvictAllPodsCrash")
-	cmd.Env = append(os.Environ(), "TEST_EVICTALLPODSCRASH=crash")
-	err := cmd.Run()
-	var have bool
-	if err == nil {
-		have = true
-	} else {
-		have = false
-	}
-	if have != false {
-		t.Fail()
-	}
-}
-
 func TestEvictAllPods(t *testing.T) {
 	resultOne := tu.GeneratePodList(1, "matching", 0)
 	resultMany := tu.GeneratePodList(4, "matching", 0)
 	resultNone := tu.GeneratePodList(2, "nonmatching", 0)
-	resultSome := tu.GeneratePodList(2, "matching", 1)
 
 	node := v1.Node{}
 	node.SetName("matching")
@@ -234,14 +185,6 @@ func TestEvictAllPods(t *testing.T) {
 			evictionSuccess: []bool{},
 			err:             nil,
 			wantEvictCalled: false,
-		},
-		{
-			name:            "some_with_toleration",
-			node:            &node,
-			podList:         resultSome,
-			evictionSuccess: []bool{true},
-			err:             nil,
-			wantEvictCalled: true,
 		},
 	}
 
@@ -345,33 +288,6 @@ func TestGetRemainingPodCount(t *testing.T) {
 	}
 }
 
-func TestEvictCrash(t *testing.T) {
-	if os.Getenv("TEST_EVICTCRASH") == "crash" {
-		clientset, policy, _, _, _ := tu.GenerateMocks()
-		drainer := NewDrainer(clientset)
-		drainer.Wait = false
-
-		evictions := tu.NewEvictions(policy, "default", t)
-		policy.EvictionsItem = evictions
-		evictions.EvictSuccess = []bool{false, false, false, false, false, false, false, false, false, false}
-		drainer.evict(&policyv1beta1.Eviction{})
-		return
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=TestEvictCrash")
-	cmd.Env = append(os.Environ(), "TEST_EVICTCRASH=crash")
-	err := cmd.Run()
-	var have bool
-	if err == nil {
-		have = true
-	} else {
-		have = false
-	}
-	if have != false {
-		t.Fail()
-	}
-}
-
 func TestEvict(t *testing.T) {
 	clientset, policy, _, _, _ := tu.GenerateMocks()
 	drainer := NewDrainer(clientset)
@@ -401,7 +317,7 @@ func TestEvict(t *testing.T) {
 			evictions.Tries = 0
 			evictions.EvictCalled = false
 			evictions.EvictSuccess = tc.successes
-			drainer.evict(&policyv1beta1.Eviction{})
+			drainer.evict(corev1.Pod{})
 			have := evictions.EvictCalled
 			if have != tc.want {
 				t.Fail()

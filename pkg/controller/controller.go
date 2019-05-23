@@ -13,7 +13,7 @@ import (
 )
 
 type Drainer interface {
-	Drain(string) error
+	Drain(string) (int, error)
 }
 
 type Controller struct {
@@ -136,12 +136,11 @@ func (c *Controller) Drain(request Request) {
 	c.inProgress += 1
 	c.metricDraining.Set(float64(c.inProgress))
 	defer func() {
-		c.lastDrain = c.clock.Now()
 		c.inProgress -= 1
 		c.metricDraining.Set(float64(c.inProgress))
 	}()
 
-	err := c.drainer.Drain(request.NodeName)
+	evicted, err := c.drainer.Drain(request.NodeName)
 	if err != nil && !drainer.IsErrNodeNotAvailable(err) {
 		// Unexpected error. Better let us die and try again.
 		logrus.Errorf("%+v", err)
@@ -151,4 +150,13 @@ func (c *Controller) Drain(request Request) {
 	if request.OnDone != nil {
 		request.OnDone()
 	}
+
+	if evicted == 0 {
+		logrus.WithField("Node", request.NodeName).
+			Info("Skipping cooldown after draining, because there were no evictions.",
+				request.NodeName)
+		return
+	}
+
+	c.lastDrain = c.clock.Now()
 }

@@ -75,7 +75,7 @@ func (d *Drainer) Drain(nodeName string) (int, error) {
 
 	if !d.hasShutdownTaint(n.Spec.Taints) {
 		n.Spec.Taints = append(n.Spec.Taints, *d.TaintShutdown)
-		_, err := d.Clientset.Core().Nodes().Update(n)
+		_, err := d.Clientset.CoreV1().Nodes().Update(n)
 		if err != nil {
 			return 0, errors.Wrap(err, "failed to update node")
 		}

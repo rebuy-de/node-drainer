@@ -1,160 +1,20 @@
 package cmd
 
 import (
-	"context"
-	"time"
-
-	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/aws/aws-sdk-go/service/ec2"
-	awssqs "github.com/aws/aws-sdk-go/service/sqs"
-	log "github.com/sirupsen/logrus"
-	cobra "github.com/spf13/cobra"
-
-	"github.com/rebuy-de/node-drainer/pkg/controller"
-	"github.com/rebuy-de/node-drainer/pkg/drainer"
-	"github.com/rebuy-de/node-drainer/pkg/prom"
-	"github.com/rebuy-de/node-drainer/pkg/sqs"
-	"github.com/rebuy-de/node-drainer/pkg/util"
-	"github.com/rebuy-de/rebuy-go-sdk/cmdutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 )
 
-type NodeDrainer struct {
-	AWSRegion   string
-	CoolDown    time.Duration
-	Kubeconfig  string
-	LogLevel    string
-	MetricsPort string
-	Profile     *util.AWSProfile
-	QueueURL    string
-	VaultServer string
-}
-
-func (nd *NodeDrainer) Run(ctx context.Context, cmd *cobra.Command, args []string) {
-	logLevel, err := log.ParseLevel(nd.LogLevel)
-	if err != nil {
-		log.Error("incorrect log level set, exiting...\n" + err.Error())
-		cmdutil.Exit(1)
-	}
-	log.SetLevel(logLevel)
-
-	if nd.VaultServer != "" {
-		log.Debugf("Getting credentials from vault at %s", nd.VaultServer)
-		vaultClient, _, err := util.FetchVaultClient(nd.VaultServer)
-		if err != nil {
-			log.Error("Couldn't get token from vault..." + err.Error())
-			cmdutil.Exit(1)
-		}
-		*nd.Profile, err = util.FetchAWSCredentials(vaultClient)
-		if err != nil {
-			log.Error("Couldn't get AWS credentials from vault..." + err.Error())
-			cmdutil.Exit(1)
-		}
-	}
-
-	if !nd.Profile.IsValid() {
-		log.Error("incorrect AWS credentials, exiting...")
-		cmdutil.Exit(1)
-	}
-
-	metricsRegistry := prom.Run(nd.MetricsPort)
-
-	if nd.QueueURL == "" {
-		log.Error("no SQS url specified, exiting...")
-		cmdutil.Exit(1)
-	}
-	url := nd.QueueURL
-
-	if nd.AWSRegion == "" {
-		log.Error("no AWS region specified, exiting...")
-		cmdutil.Exit(1)
-	}
-
-	session := nd.Profile.BuildSession(nd.AWSRegion)
-	svcAutoscaling := autoscaling.New(session)
-	svcSqs := awssqs.New(session)
-	svcEc2 := ec2.New(session)
-	queueUrl := util.GetQueueURL(session, url, nd.AWSRegion, nd.Profile)
-
-	requests := make(chan controller.Request, 100)
-	drainer := drainer.NewDrainer(util.KubernetesClientset(nd.Kubeconfig))
-
-	sqs := sqs.NewMessageHandler(requests, &queueUrl, svcAutoscaling, svcSqs, svcEc2)
-	ctl := controller.New(drainer, requests, nd.CoolDown)
-	ctl.RegisterMetrics(metricsRegistry)
-
-	go sqs.Run(ctx)
-	cmdutil.Must(ctl.Reconcile(ctx))
-}
-
-func (nd *NodeDrainer) Bind(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVarP(
-		&nd.Kubeconfig, "kubeconfig", "k", "",
-		"Location of the kubeconfig file for local deployment.")
-
-	cmd.PersistentFlags().StringVarP(
-		&nd.Profile.Profile, "profile", "p", "",
-		"Name of the AWS profile name for accessing the AWS API. "+
-			"Cannot be used together with --access-key-id, --secret-access-key, "+
-			"--ec2-role-provider and --session-token.")
-
-	cmd.PersistentFlags().StringVar(
-		&nd.Profile.AccessKeyID, "access-key-id", "",
-		"AWS access key ID for accessing the AWS API. "+
-			"Must be used together with --secret-access-key."+
-			"Cannot be used together with --profile or --ec2-role-provider.")
-
-	cmd.PersistentFlags().StringVar(
-		&nd.Profile.SecretAccessKey, "secret-access-key", "",
-		"AWS secret access key for accessing the AWS API. "+
-			"Must be used together with --access-key-id."+
-			"Cannot be used together with --profile or --ec2-role-provider.")
-
-	cmd.PersistentFlags().StringVar(
-		&nd.Profile.SessionToken, "session-token", "",
-		"AWS session token for accessing the AWS API. "+
-			"Must be used together with --access-key-id and --secret-access-key."+
-			"Cannot be used together with --profile or --ec2-role-provider.")
-
-	cmd.PersistentFlags().BoolVar(
-		&nd.Profile.EC2RoleProvider, "ec2-role-provider", false,
-		"AWS session via EC2 Roles. "+
-			"Cannot be used together with --access-key-id, --secret-access-key, --profile "+
-			"and --session-token.")
-
-	cmd.PersistentFlags().StringVarP(
-		&nd.LogLevel, "log-level", "l", "info",
-		"Log level. Defults to info.")
-
-	cmd.PersistentFlags().StringVarP(
-		&nd.QueueURL, "queue-name", "q", "",
-		"The name of the sqs Queue, used to generate the queue address. This argument is mandatory.")
-
-	cmd.PersistentFlags().StringVarP(
-		&nd.AWSRegion, "region", "r", "",
-		"AWS region. This argument is mandatory.")
-
-	cmd.PersistentFlags().StringVarP(
-		&nd.MetricsPort, "metrics-port", "m", "8080",
-		"Port on which prometheus `/metrics` will be exposed.")
-
-	cmd.PersistentFlags().DurationVarP(
-		&nd.CoolDown, "cool-down", "c", 10*time.Minute,
-		"Time node-drainer should sleep after draining a node before starting to handle the next one.")
-
-	cmd.PersistentFlags().StringVar(
-		&nd.VaultServer, "vault", "",
-		"Vault server address for k8s auth. Cannot be used with AWS credentials or profiles.")
-}
-
 func NewRootCommand() *cobra.Command {
-	nd := new(NodeDrainer)
-	nd.Profile = new(util.AWSProfile)
-	cmd := cmdutil.NewRootCommand(nd)
+	r := new(Runner)
 
-	cmd.Use = "node-drainer"
-	cmd.Short = "Node drainer utility."
-	cmd.Long = `Drains selected kubernetes nodes while applying a NoSchedule taint. ` +
-		`Nodes to be drained are selected by receiving AWS ASG lifecycle hook triggers over sqs.`
-
-	return cmd
+	return cmdutil.New(
+		"node-drainer", "A Slack integration to manage k8s deployments.",
+		r.Bind,
+		cmdutil.WithLogVerboseFlag(),
+		cmdutil.WithVersionCommand(),
+		cmdutil.WithVersionLog(logrus.InfoLevel),
+		cmdutil.WithRun(r.Run),
+	)
 }

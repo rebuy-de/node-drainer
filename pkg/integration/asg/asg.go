@@ -1,5 +1,5 @@
 // Package asg provides a handler for a ASG Lifecycle Hook, that is delivered
-// via SQS. The handler manages a local cache, that is filled from SQS
+// via SQS. The handler manages a local cache, which is filled from SQS
 // messages. The instance lifecycle can be completed, so the ASG can continue
 // to terminate an instance. If an instance gets terminated, it will be removed
 // from the cache.

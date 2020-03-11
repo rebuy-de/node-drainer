@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -45,6 +46,9 @@ type Instance struct {
 	// Name is the node name of the EC2 Instance which is based on the private
 	// DNS name.
 	Name string
+
+	// Time is the moment when the shutdown signal arrived.
+	Time time.Time
 }
 
 type cacheValue struct {
@@ -209,7 +213,7 @@ func (h *handler) handle(message *sqs.Message) error {
 			ReceiptHandle: aws.String(cacheItem.ReceiptHandle),
 		})
 		delete(h.cache, id)
-		l.Info("removed non-existing instance from cache")
+		l.Info("removed message for non-existing instance")
 		return nil
 	}
 
@@ -261,24 +265,20 @@ func (h *handler) getInstance(id string) (string, instanceState, error) {
 }
 
 func (h *handler) List() []Instance {
-	messages := []cacheValue{}
+	messages := []Instance{}
 	for _, m := range h.cache {
-		messages = append(messages, m)
-	}
-
-	sort.Slice(messages, func(i, j int) bool {
-		return messages[i].Body.Time.Before(messages[j].Body.Time)
-	})
-
-	result := []Instance{}
-	for _, m := range messages {
-		result = append(result, Instance{
+		messages = append(messages, Instance{
 			ID:   m.Body.EC2InstanceId,
 			Name: m.NodeName,
+			Time: m.Body.Time,
 		})
 	}
 
-	return result
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].Time.Before(messages[j].Time)
+	})
+
+	return messages
 }
 
 func (h *handler) Complete(id string) error {
@@ -295,8 +295,18 @@ func (h *handler) Complete(id string) error {
 		LifecycleActionResult: aws.String("CONTINUE"),
 	})
 
-	// Note: We neither remove the instance from cache, nor do we delete the
-	// message. This is done in the next SQS message receive to be a bit more failsafe.
+	if err != nil && strings.HasPrefix(err.Error(),
+		"ValidationError: No active Lifecycle Action found with instance") {
+		// Unfortunately this error does not have a proper error code. Anyway,
+		// the Complete call should be idempotent, so we ignore this error.
+		err = nil
+	}
+
+	// Note: We do not delete the message. This is done in the next SQS message
+	// receive to be a bit more failsafe. Anyway, it gets removed from the
+	// cache to avoid a stale List() output which could cause a unnecessary
+	// delay in the main loop.
+	delete(h.cache, id)
 
 	return errors.WithStack(err)
 }

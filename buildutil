@@ -1,10 +1,10 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 set -euo pipefail
 
 cd $(dirname "$0")
 
-VERSION="v2.0.0+alpha.4"
+VERSION="v2.2.0"
 
 get_arch() {
     ARCH=$(uname -m)

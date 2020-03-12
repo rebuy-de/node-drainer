@@ -52,11 +52,14 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler) error {
 	l := logrus.WithField("subsystem", "mainloop")
 
+	signaler := handler.NewSignaler()
+
 	for ctx.Err() == nil {
+		<-signaler.C(ctx, time.Minute)
+
 		instances := handler.List()
 		if len(instances) == 0 {
-			l.Info("no instances waiting for shutdown")
-			time.Sleep(5 * time.Second)
+			l.Debug("no instances waiting for shutdown")
 			continue
 		}
 
@@ -65,7 +68,7 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler) error {
 			l := l.WithFields(logrus.Fields{
 				"node_name":   instance.Name,
 				"instance_id": instance.ID,
-				"time":        instance.Time,
+				"since":       instance.Since,
 			})
 			l.Debugf("%s is waiting for shutdown", instance.Name)
 		}
@@ -74,14 +77,12 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler) error {
 		l.WithFields(logrus.Fields{
 			"node_name":   instance.Name,
 			"instance_id": instance.ID,
-			"time":        instance.Time,
+			"since":       instance.Since,
 		}).Info("marking node as complete")
 		err := handler.Complete(instance.ID)
 		if err != nil {
 			return errors.Wrap(err, "failed to mark node as complete")
 		}
-
-		time.Sleep(time.Second)
 	}
 
 	return nil

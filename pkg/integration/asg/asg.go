@@ -21,6 +21,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 )
 
 type Handler interface {
@@ -37,6 +39,8 @@ type Handler interface {
 	// not yet remove the instance from the cache until the instance actually
 	// terminated.
 	Complete(id string) error
+
+	NewSignaler() syncutil.Signaler
 }
 
 type Instance struct {
@@ -47,8 +51,8 @@ type Instance struct {
 	// DNS name.
 	Name string
 
-	// Time is the moment when the shutdown signal arrived.
-	Time time.Time
+	// Since is the time when the shutdown signal arrived.
+	Since time.Time
 }
 
 type cacheValue struct {
@@ -94,12 +98,13 @@ func (s instanceState) IsRunning() bool {
 }
 
 type handler struct {
-	asg    *autoscaling.AutoScaling
-	sqs    *sqs.SQS
-	ec2    *ec2.EC2
-	url    string
-	cache  map[string]*cacheValue
-	logger logrus.FieldLogger
+	asg     *autoscaling.AutoScaling
+	sqs     *sqs.SQS
+	ec2     *ec2.EC2
+	url     string
+	cache   map[string]*cacheValue
+	emitter *syncutil.SignalEmitter
+	logger  logrus.FieldLogger
 }
 
 // NewHandler creates a new Handler for ASG Lifecycle Hooks that are delivered
@@ -115,13 +120,18 @@ func NewHandler(sess *session.Session, queueName string) (Handler, error) {
 	}
 
 	return &handler{
-		asg:    autoscaling.New(sess),
-		sqs:    sqsClient,
-		ec2:    ec2.New(sess),
-		url:    *out.QueueUrl,
-		cache:  map[string]*cacheValue{},
-		logger: logrus.WithField("subsystem", "asghandler"),
+		asg:     autoscaling.New(sess),
+		sqs:     sqsClient,
+		ec2:     ec2.New(sess),
+		url:     *out.QueueUrl,
+		cache:   map[string]*cacheValue{},
+		logger:  logrus.WithField("subsystem", "asghandler"),
+		emitter: new(syncutil.SignalEmitter),
 	}, nil
+}
+
+func (h *handler) NewSignaler() syncutil.Signaler {
+	return syncutil.SignalerFromEmitters(h.emitter)
 }
 
 func (h *handler) Run(ctx context.Context) error {
@@ -215,6 +225,7 @@ func (h *handler) handle(message *sqs.Message) error {
 		})
 		delete(h.cache, id)
 		l.Info("removed message for non-existing instance")
+		h.emitter.Emit()
 		return nil
 	}
 
@@ -225,6 +236,7 @@ func (h *handler) handle(message *sqs.Message) error {
 		l.Debug("instance already in cache")
 	} else {
 		l.Info("added instance to cache")
+		h.emitter.Emit()
 	}
 
 	return nil
@@ -273,14 +285,14 @@ func (h *handler) List() []Instance {
 		}
 
 		messages = append(messages, Instance{
-			ID:   m.Body.EC2InstanceId,
-			Name: m.NodeName,
-			Time: m.Body.Time,
+			ID:    m.Body.EC2InstanceId,
+			Name:  m.NodeName,
+			Since: m.Body.Time,
 		})
 	}
 
 	sort.Slice(messages, func(i, j int) bool {
-		return messages[i].Time.Before(messages[j].Time)
+		return messages[i].Since.Before(messages[j].Since)
 	})
 
 	return messages
@@ -319,6 +331,7 @@ func (h *handler) Complete(id string) error {
 	// stale List() output which could cause a unnecessary delay in the main
 	// loop.
 	message.completed = true
+	h.emitter.Emit()
 
 	return nil
 

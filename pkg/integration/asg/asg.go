@@ -56,6 +56,7 @@ type cacheValue struct {
 	ReceiptHandle string
 	NodeName      string
 	Body          messageBody
+	completed     bool
 }
 
 type messageBody struct {
@@ -97,7 +98,7 @@ type handler struct {
 	sqs    *sqs.SQS
 	ec2    *ec2.EC2
 	url    string
-	cache  map[string]cacheValue
+	cache  map[string]*cacheValue
 	logger logrus.FieldLogger
 }
 
@@ -118,7 +119,7 @@ func NewHandler(sess *session.Session, queueName string) (Handler, error) {
 		sqs:    sqsClient,
 		ec2:    ec2.New(sess),
 		url:    *out.QueueUrl,
-		cache:  map[string]cacheValue{},
+		cache:  map[string]*cacheValue{},
 		logger: logrus.WithField("subsystem", "asghandler"),
 	}, nil
 }
@@ -218,7 +219,7 @@ func (h *handler) handle(message *sqs.Message) error {
 	}
 
 	_, exists := h.cache[id]
-	h.cache[id] = cacheItem
+	h.cache[id] = &cacheItem
 
 	if exists {
 		l.Debug("instance already in cache")
@@ -267,6 +268,10 @@ func (h *handler) getInstance(id string) (string, instanceState, error) {
 func (h *handler) List() []Instance {
 	messages := []Instance{}
 	for _, m := range h.cache {
+		if m.completed {
+			continue
+		}
+
 		messages = append(messages, Instance{
 			ID:   m.Body.EC2InstanceId,
 			Name: m.NodeName,
@@ -288,6 +293,11 @@ func (h *handler) Complete(id string) error {
 		return nil
 	}
 
+	if message.completed {
+		logrus.Debugf("instance %s already marked as completed", id)
+		return nil
+	}
+
 	_, err := h.asg.CompleteLifecycleAction(&autoscaling.CompleteLifecycleActionInput{
 		InstanceId:            &id,
 		AutoScalingGroupName:  &message.Body.AutoScalingGroupName,
@@ -299,14 +309,17 @@ func (h *handler) Complete(id string) error {
 		"ValidationError: No active Lifecycle Action found with instance") {
 		// Unfortunately this error does not have a proper error code. Anyway,
 		// the Complete call should be idempotent, so we ignore this error.
-		err = nil
+	} else if err != nil {
+		return errors.WithStack(err)
 	}
 
-	// Note: We do not delete the message. This is done in the next SQS message
-	// receive to be a bit more failsafe. Anyway, it gets removed from the
-	// cache to avoid a stale List() output which could cause a unnecessary
-	// delay in the main loop.
-	delete(h.cache, id)
+	// Note: We neither remove the instance from cache, nor do we delete the
+	// message. This is done in the next SQS message receive to be a bit more
+	// failsafe. Anyway, it gets marked as completed in the cache to avoid a
+	// stale List() output which could cause a unnecessary delay in the main
+	// loop.
+	message.completed = true
 
-	return errors.WithStack(err)
+	return nil
+
 }

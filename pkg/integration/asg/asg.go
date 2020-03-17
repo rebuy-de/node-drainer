@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -20,6 +21,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 )
 
 type Handler interface {
@@ -36,6 +39,8 @@ type Handler interface {
 	// not yet remove the instance from the cache until the instance actually
 	// terminated.
 	Complete(id string) error
+
+	NewSignaler() syncutil.Signaler
 }
 
 type Instance struct {
@@ -45,6 +50,9 @@ type Instance struct {
 	// Name is the node name of the EC2 Instance which is based on the private
 	// DNS name.
 	Name string
+
+	// Since is the time when the shutdown signal arrived.
+	Since time.Time
 }
 
 type cacheValue struct {
@@ -52,6 +60,7 @@ type cacheValue struct {
 	ReceiptHandle string
 	NodeName      string
 	Body          messageBody
+	completed     bool
 }
 
 type messageBody struct {
@@ -89,12 +98,13 @@ func (s instanceState) IsRunning() bool {
 }
 
 type handler struct {
-	asg    *autoscaling.AutoScaling
-	sqs    *sqs.SQS
-	ec2    *ec2.EC2
-	url    string
-	cache  map[string]cacheValue
-	logger logrus.FieldLogger
+	asg     *autoscaling.AutoScaling
+	sqs     *sqs.SQS
+	ec2     *ec2.EC2
+	url     string
+	cache   map[string]*cacheValue
+	emitter *syncutil.SignalEmitter
+	logger  logrus.FieldLogger
 }
 
 // NewHandler creates a new Handler for ASG Lifecycle Hooks that are delivered
@@ -110,13 +120,18 @@ func NewHandler(sess *session.Session, queueName string) (Handler, error) {
 	}
 
 	return &handler{
-		asg:    autoscaling.New(sess),
-		sqs:    sqsClient,
-		ec2:    ec2.New(sess),
-		url:    *out.QueueUrl,
-		cache:  map[string]cacheValue{},
-		logger: logrus.WithField("subsystem", "asghandler"),
+		asg:     autoscaling.New(sess),
+		sqs:     sqsClient,
+		ec2:     ec2.New(sess),
+		url:     *out.QueueUrl,
+		cache:   map[string]*cacheValue{},
+		logger:  logrus.WithField("subsystem", "asghandler"),
+		emitter: new(syncutil.SignalEmitter),
 	}, nil
+}
+
+func (h *handler) NewSignaler() syncutil.Signaler {
+	return syncutil.SignalerFromEmitters(h.emitter)
 }
 
 func (h *handler) Run(ctx context.Context) error {
@@ -209,17 +224,19 @@ func (h *handler) handle(message *sqs.Message) error {
 			ReceiptHandle: aws.String(cacheItem.ReceiptHandle),
 		})
 		delete(h.cache, id)
-		l.Info("removed non-existing instance from cache")
+		l.Info("removed message for non-existing instance")
+		h.emitter.Emit()
 		return nil
 	}
 
 	_, exists := h.cache[id]
-	h.cache[id] = cacheItem
+	h.cache[id] = &cacheItem
 
 	if exists {
 		l.Debug("instance already in cache")
 	} else {
 		l.Info("added instance to cache")
+		h.emitter.Emit()
 	}
 
 	return nil
@@ -261,30 +278,35 @@ func (h *handler) getInstance(id string) (string, instanceState, error) {
 }
 
 func (h *handler) List() []Instance {
-	messages := []cacheValue{}
+	messages := []Instance{}
 	for _, m := range h.cache {
-		messages = append(messages, m)
-	}
+		if m.completed {
+			continue
+		}
 
-	sort.Slice(messages, func(i, j int) bool {
-		return messages[i].Body.Time.Before(messages[j].Body.Time)
-	})
-
-	result := []Instance{}
-	for _, m := range messages {
-		result = append(result, Instance{
-			ID:   m.Body.EC2InstanceId,
-			Name: m.NodeName,
+		messages = append(messages, Instance{
+			ID:    m.Body.EC2InstanceId,
+			Name:  m.NodeName,
+			Since: m.Body.Time,
 		})
 	}
 
-	return result
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].Since.Before(messages[j].Since)
+	})
+
+	return messages
 }
 
 func (h *handler) Complete(id string) error {
 	message, ok := h.cache[id]
 	if !ok {
 		logrus.Warnf("instance %s not found in cache, assuming it is already gone", id)
+		return nil
+	}
+
+	if message.completed {
+		logrus.Debugf("instance %s already marked as completed", id)
 		return nil
 	}
 
@@ -295,8 +317,22 @@ func (h *handler) Complete(id string) error {
 		LifecycleActionResult: aws.String("CONTINUE"),
 	})
 
-	// Note: We neither remove the instance from cache, nor do we delete the
-	// message. This is done in the next SQS message receive to be a bit more failsafe.
+	if err != nil && strings.HasPrefix(err.Error(),
+		"ValidationError: No active Lifecycle Action found with instance") {
+		// Unfortunately this error does not have a proper error code. Anyway,
+		// the Complete call should be idempotent, so we ignore this error.
+	} else if err != nil {
+		return errors.WithStack(err)
+	}
 
-	return errors.WithStack(err)
+	// Note: We neither remove the instance from cache, nor do we delete the
+	// message. This is done in the next SQS message receive to be a bit more
+	// failsafe. Anyway, it gets marked as completed in the cache to avoid a
+	// stale List() output which could cause a unnecessary delay in the main
+	// loop.
+	message.completed = true
+	h.emitter.Emit()
+
+	return nil
+
 }

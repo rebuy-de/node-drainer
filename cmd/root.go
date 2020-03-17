@@ -10,9 +10,10 @@ func NewRootCommand() *cobra.Command {
 	r := new(Runner)
 
 	return cmdutil.New(
-		"node-drainer", "A Slack integration to manage k8s deployments.",
+		"node-drainer", "Reads AWS ASG Lifecycle Events and drains Kubernetes nodes",
 		r.Bind,
 		cmdutil.WithLogVerboseFlag(),
+		cmdutil.WithLogToGraylog(),
 		cmdutil.WithVersionCommand(),
 		cmdutil.WithVersionLog(logrus.InfoLevel),
 		cmdutil.WithRun(r.Run),

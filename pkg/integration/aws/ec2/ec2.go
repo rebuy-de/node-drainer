@@ -53,6 +53,14 @@ func (s *Store) List() []Instance {
 	}
 
 	sort.Slice(result, func(i, j int) bool {
+		// Sorting by something other than LaunchTime is required, because the
+		// time has only second precision and it is quite likely that some
+		// instances are started at the same time. And since the list is based
+		// on a map, the order would be flaky.
+		return result[i].InstanceID < result[j].InstanceID
+	})
+
+	sort.SliceStable(result, func(i, j int) bool {
 		return result[i].LaunchTime.Before(result[j].LaunchTime)
 	})
 

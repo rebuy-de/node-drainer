@@ -23,9 +23,9 @@
           <thead>
             <tr>
               <th>Instance ID</th>
-              <th>Name</th>
+              <th>Host Name</th>
+              <th>Instance Name</th>
               <th>Type</th>
-              <th>ASG</th>
               <th>AZ</th>
               <th>Livecycle</th>
               <th>State</th>
@@ -36,9 +36,9 @@
             {{ range .EC2Instances }}
               <tr>
                 <td>{{ .InstanceID }}</td>
-                <td>{{ .NodeName }}</td>
+                <td>{{ .HostName }}</td>
+                <td>{{ .InstanceName }}</td>
                 <td>{{ .InstanceType }}</td>
-                <td>{{ .AutoScalingGroupName }}</td>
                 <td>{{ .AvailabilityZone }}</td>
                 <td>{{ .InstanceLifecycle }}</td>
                 <td>{{ .State }}</td>

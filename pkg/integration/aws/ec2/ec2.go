@@ -16,7 +16,8 @@ import (
 
 type Instance struct {
 	InstanceID           string
-	NodeName             string
+	InstanceName         string
+	HostName             string
 	InstanceType         string
 	AutoScalingGroupName string
 	AvailabilityZone     string
@@ -147,14 +148,14 @@ func (s *Store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 				}
 
 				instances[id] = Instance{
-					InstanceID:           id,
-					NodeName:             aws.StringValue(dto.PrivateDnsName),
-					State:                aws.StringValue(dto.State.Name),
-					InstanceType:         aws.StringValue(dto.InstanceType),
-					AutoScalingGroupName: ec2tag(dto, "aws:autoscaling:groupName"),
-					AvailabilityZone:     aws.StringValue(dto.Placement.AvailabilityZone),
-					InstanceLifecycle:    aws.StringValue(dto.InstanceLifecycle),
-					LaunchTime:           aws.TimeValue(dto.LaunchTime).Local(),
+					InstanceID:        id,
+					HostName:          aws.StringValue(dto.PrivateDnsName),
+					State:             aws.StringValue(dto.State.Name),
+					InstanceType:      aws.StringValue(dto.InstanceType),
+					InstanceName:      ec2tag(dto, "Name"),
+					AvailabilityZone:  aws.StringValue(dto.Placement.AvailabilityZone),
+					InstanceLifecycle: aws.StringValue(dto.InstanceLifecycle),
+					LaunchTime:        aws.TimeValue(dto.LaunchTime).Local(),
 				}
 			}
 		}

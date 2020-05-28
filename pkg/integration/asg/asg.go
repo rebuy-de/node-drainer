@@ -40,7 +40,7 @@ type Handler interface {
 	// terminated.
 	Complete(id string) error
 
-	NewSignaler() syncutil.Signaler
+	SignalEmitter() *syncutil.SignalEmitter
 }
 
 type Instance struct {
@@ -130,8 +130,8 @@ func NewHandler(sess *session.Session, queueName string) (Handler, error) {
 	}, nil
 }
 
-func (h *handler) NewSignaler() syncutil.Signaler {
-	return syncutil.SignalerFromEmitters(h.emitter)
+func (h *handler) SignalEmitter() *syncutil.SignalEmitter {
+	return h.emitter
 }
 
 func (h *handler) Run(ctx context.Context) error {

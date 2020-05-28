@@ -13,6 +13,7 @@ import (
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
+	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 )
 
 type Runner struct {
@@ -50,15 +51,18 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 		return errors.Wrap(handler.Run(ctx), "failed to run handler")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(r.runMainLoop(ctx, handler), "failed to run main loop")
+		return errors.Wrap(r.runMainLoop(ctx, handler, ec2Client), "failed to run main loop")
 	})
 	cmdutil.Must(egrp.Wait())
 }
 
-func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler) error {
+func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2 *aws.EC2Client) error {
 	l := logrus.WithField("subsystem", "mainloop")
 
-	signaler := handler.NewSignaler()
+	signaler := syncutil.SignalerFromEmitters(
+		handler.SignalEmitter(),
+		ec2.SignalEmitter(),
+	)
 
 	for ctx.Err() == nil {
 		<-signaler.C(ctx, time.Minute)

@@ -38,6 +38,10 @@ func NewEC2Client(sess *session.Session, refresh time.Duration) *EC2Client {
 	}
 }
 
+func (c *EC2Client) SignalEmitter() *syncutil.SignalEmitter {
+	return c.emitter
+}
+
 func (c *EC2Client) Run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		err := c.runOnce(ctx)
@@ -105,8 +109,6 @@ func (c *EC2Client) runOnce(ctx context.Context) error {
 }
 
 func (c *EC2Client) fetchInstances(ctx context.Context) (map[string]EC2Instance, error) {
-	logutil.Get(ctx).Debug("fetching instances")
-
 	params := &ec2.DescribeInstancesInput{}
 	instances := map[string]EC2Instance{}
 
@@ -149,6 +151,5 @@ func (c *EC2Client) fetchInstances(ctx context.Context) (map[string]EC2Instance,
 		}
 	}
 
-	logutil.Get(ctx).Debug("fetching instances succeeded")
 	return instances, nil
 }

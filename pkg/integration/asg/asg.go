@@ -17,12 +17,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
 type Handler interface {
@@ -35,10 +35,11 @@ type Handler interface {
 	// instance cache will be updated in the background, based on SQS Messages.
 	List() []Instance
 
-	// Complete finishes the ASG Lifecycle Hook Action with "CONTINUE". It does
-	// not yet remove the instance from the cache until the instance actually
-	// terminated.
-	Complete(id string) error
+	// Complete finishes the ASG Lifecycle Hook Action with "CONTINUE".
+	Complete(ctx context.Context, id string) error
+
+	// Delete deletes the message from SQS.
+	Delete(ctx context.Context, id string) error
 
 	SignalEmitter() *syncutil.SignalEmitter
 }
@@ -47,20 +48,23 @@ type Instance struct {
 	// ID is the EC2 Instance ID
 	ID string
 
-	// Name is the node name of the EC2 Instance which is based on the private
-	// DNS name.
-	Name string
+	// TriggeredAt is the thime then the shutdown was triggered.
+	TriggeredAt time.Time
 
-	// Since is the time when the shutdown signal arrived.
-	Since time.Time
+	// CompletedAt is the time when Complete() was called.
+	CompletedAt time.Time
+
+	// DeletedAt is the time when Delete() was called. Deleted instaces get
+	// deleted after one hour.
+	DeletedAt time.Time
 }
 
 type cacheValue struct {
 	MessageId     string
 	ReceiptHandle string
-	NodeName      string
 	Body          messageBody
-	completed     bool
+	completedAt   time.Time
+	deletedAt     time.Time
 }
 
 type messageBody struct {
@@ -76,35 +80,12 @@ type messageBody struct {
 	Event                string
 }
 
-type instanceState string
-
-const (
-	instanceStateUnknown  instanceState = ""
-	instanceStateNotFound               = "not-found"
-)
-
-func (s instanceState) IsRunning() bool {
-	switch s {
-	case "shutting-down":
-		fallthrough
-	case "terminated":
-		return false
-	case "running":
-		return true
-	default:
-		// Assume that it is running, so we still can try to drain the node.
-		return true
-	}
-}
-
 type handler struct {
 	asg     *autoscaling.AutoScaling
 	sqs     *sqs.SQS
-	ec2     *ec2.EC2
 	url     string
 	cache   map[string]*cacheValue
 	emitter *syncutil.SignalEmitter
-	logger  logrus.FieldLogger
 }
 
 // NewHandler creates a new Handler for ASG Lifecycle Hooks that are delivered
@@ -122,10 +103,8 @@ func NewHandler(sess *session.Session, queueName string) (Handler, error) {
 	return &handler{
 		asg:     autoscaling.New(sess),
 		sqs:     sqsClient,
-		ec2:     ec2.New(sess),
 		url:     *out.QueueUrl,
 		cache:   map[string]*cacheValue{},
-		logger:  logrus.WithField("subsystem", "asghandler"),
 		emitter: new(syncutil.SignalEmitter),
 	}, nil
 }
@@ -135,6 +114,8 @@ func (h *handler) SignalEmitter() *syncutil.SignalEmitter {
 }
 
 func (h *handler) Run(ctx context.Context) error {
+	ctx = logutil.Start(ctx, "asglifecycle")
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -164,7 +145,7 @@ func (h *handler) Run(ctx context.Context) error {
 			}
 
 			for _, message := range result.Messages {
-				err := h.handle(message)
+				err := h.handle(ctx, message)
 				if err != nil {
 					return errors.Wrap(err, "failed handle message")
 				}
@@ -173,24 +154,23 @@ func (h *handler) Run(ctx context.Context) error {
 	}
 }
 
-func (h *handler) handle(message *sqs.Message) error {
+func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
+	ctx = logutil.Start(ctx, "handle")
 	cacheItem := cacheValue{
 		MessageId:     aws.StringValue(message.MessageId),
 		ReceiptHandle: aws.StringValue(message.ReceiptHandle),
 	}
 
-	l := h.logger.WithFields(logrus.Fields{
-		"message_id": aws.StringValue(message.MessageId),
-	})
+	ctx = logutil.WithField(ctx, "message-id", aws.StringValue(message.MessageId))
 
-	l.Debugf("got message: %s", aws.StringValue(message.Body))
+	logutil.Get(ctx).Debugf("got message: %s", aws.StringValue(message.Body))
 
 	err := json.Unmarshal([]byte(aws.StringValue(message.Body)), &cacheItem.Body)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode message body")
 	}
 
-	l = l.WithFields(logrus.Fields{
+	ctx = logutil.WithFields(ctx, logrus.Fields{
 		"asg_name":     cacheItem.Body.AutoScalingGroupName,
 		"message_time": cacheItem.Body.Time,
 		"transistion":  cacheItem.Body.LifecycleTransition,
@@ -198,7 +178,7 @@ func (h *handler) handle(message *sqs.Message) error {
 	})
 
 	if cacheItem.Body.Event == "autoscaling:TEST_NOTIFICATION" {
-		l.Info("Skipping autoscaling:TEST_NOTIFICATION event")
+		logutil.Get(ctx).Info("Skipping autoscaling:TEST_NOTIFICATION event")
 		h.sqs.DeleteMessage(&sqs.DeleteMessageInput{
 			QueueUrl:      aws.String(h.url),
 			ReceiptHandle: aws.String(cacheItem.ReceiptHandle),
@@ -207,106 +187,46 @@ func (h *handler) handle(message *sqs.Message) error {
 	}
 
 	id := cacheItem.Body.EC2InstanceId
-	nodeName, state, err := h.getInstance(id)
-	cacheItem.NodeName = nodeName
-	if err != nil {
-		return errors.Wrapf(err, "failed to get instance state for ID %s", id)
-	}
-
-	l = l.WithFields(logrus.Fields{
-		"node_name": nodeName,
-		"state":     state,
-	})
-
-	if !state.IsRunning() {
-		h.sqs.DeleteMessage(&sqs.DeleteMessageInput{
-			QueueUrl:      aws.String(h.url),
-			ReceiptHandle: aws.String(cacheItem.ReceiptHandle),
-		})
-		delete(h.cache, id)
-		l.Info("removed message for non-existing instance")
-		h.emitter.Emit()
-		return nil
-	}
 
 	_, exists := h.cache[id]
 	h.cache[id] = &cacheItem
 
-	if exists {
-		l.Debug("instance already in cache")
-	} else {
-		l.Info("added instance to cache")
+	if !exists {
+		logutil.Get(ctx).Info("added instance to cache")
 		h.emitter.Emit()
 	}
 
 	return nil
 }
 
-func (h *handler) getInstance(id string) (string, instanceState, error) {
-	l := h.logger.WithField("instance_id", id)
-
-	statusOutput, err := h.ec2.DescribeInstances(&ec2.DescribeInstancesInput{
-		InstanceIds: []*string{
-			aws.String(id),
-		},
-	})
-
-	if err != nil {
-		awsErr := err.(awserr.Error)
-		if awsErr.Code() == "InvalidInstanceID.NotFound" {
-			l.Warnf("instance with ID %s not found", id)
-			return "", instanceStateNotFound, nil
-		}
-		return "", instanceStateUnknown, errors.Wrap(err, "failed to describe instance")
-	}
-
-	if len(statusOutput.Reservations) > 1 || len(statusOutput.Reservations[0].Instances) > 1 {
-		return "", instanceStateUnknown, errors.Errorf("found multiple instances")
-	}
-
-	if len(statusOutput.Reservations[0].Instances) == 0 {
-		return "", instanceStateUnknown, nil
-	}
-
-	var (
-		ec2instance = statusOutput.Reservations[0].Instances[0]
-		nodeName    = aws.StringValue(ec2instance.PrivateDnsName)
-		state       = aws.StringValue(ec2instance.State.Name)
-	)
-
-	return nodeName, instanceState(state), nil
-}
-
 func (h *handler) List() []Instance {
 	messages := []Instance{}
 	for _, m := range h.cache {
-		if m.completed {
-			continue
-		}
-
 		messages = append(messages, Instance{
-			ID:    m.Body.EC2InstanceId,
-			Name:  m.NodeName,
-			Since: m.Body.Time,
+			ID:          m.Body.EC2InstanceId,
+			TriggeredAt: m.Body.Time,
+			CompletedAt: m.completedAt,
 		})
 	}
 
 	sort.Slice(messages, func(i, j int) bool {
-		return messages[i].Since.Before(messages[j].Since)
+		return messages[i].TriggeredAt.Before(messages[j].TriggeredAt)
 	})
 
 	return messages
 }
 
-func (h *handler) Complete(id string) error {
+func (h *handler) Complete(ctx context.Context, id string) error {
+	l := logutil.Get(ctx).WithField("instance-id", id)
+
 	message, ok := h.cache[id]
 	if !ok {
-		logrus.Warnf("instance %s not found in cache, assuming it is already gone", id)
+		l.Warnf("instance %s not found in cache, assuming it is already gone", id)
 		return nil
 	}
 
-	if message.completed {
-		logrus.Debugf("instance %s already marked as completed", id)
+	if message.completedAt.IsZero() {
+		l.Debugf("instance %s already marked as completed", id)
 		return nil
 	}
 
@@ -330,9 +250,36 @@ func (h *handler) Complete(id string) error {
 	// failsafe. Anyway, it gets marked as completed in the cache to avoid a
 	// stale List() output which could cause a unnecessary delay in the main
 	// loop.
-	message.completed = true
+	message.completedAt = time.Now()
 	h.emitter.Emit()
 
 	return nil
+}
 
+func (h *handler) Delete(ctx context.Context, id string) error {
+	l := logutil.Get(ctx).WithField("instance-id", id)
+
+	cacheItem, ok := h.cache[id]
+	if !ok {
+		l.Warnf("instance %s not found in cache, assuming it is already gone", id)
+		return nil
+	}
+
+	if cacheItem.deletedAt.IsZero() {
+		l.Debugf("instance %s already marked as deleted", id)
+		return nil
+	}
+
+	_, err := h.sqs.DeleteMessage(&sqs.DeleteMessageInput{
+		QueueUrl:      aws.String(h.url),
+		ReceiptHandle: aws.String(cacheItem.ReceiptHandle),
+	})
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	cacheItem.deletedAt = time.Now()
+	h.emitter.Emit()
+
+	return nil
 }

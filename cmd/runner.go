@@ -76,20 +76,22 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2 *aws.
 		l.Infof("%d instances are waiting for shutdown", len(instances))
 		for _, instance := range instances {
 			l := l.WithFields(logrus.Fields{
-				"node_name":   instance.Name,
-				"instance_id": instance.ID,
-				"since":       instance.Since,
+				"instance-id":  instance.ID,
+				"triggered-at": instance.TriggeredAt,
+				"completed-at": instance.CompletedAt,
+				"deleted-at":   instance.DeletedAt,
 			})
-			l.Debugf("%s is waiting for shutdown", instance.Name)
+			l.Debugf("%s is waiting for shutdown", instance.ID)
 		}
 
 		instance := instances[0]
 		l.WithFields(logrus.Fields{
-			"node_name":   instance.Name,
-			"instance_id": instance.ID,
-			"since":       instance.Since,
+			"instance-id":  instance.ID,
+			"triggered-at": instance.TriggeredAt,
+			"completed-at": instance.CompletedAt,
+			"deleted-at":   instance.DeletedAt,
 		}).Info("marking node as complete")
-		err := handler.Complete(instance.ID)
+		err := handler.Complete(ctx, instance.ID)
 		if err != nil {
 			return errors.Wrap(err, "failed to mark node as complete")
 		}

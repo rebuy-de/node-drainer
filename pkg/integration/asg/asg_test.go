@@ -68,7 +68,7 @@ func TestAll(t *testing.T) {
 	}
 
 	helper.section("Complete First Instance and Wait for it to Disappear")
-	helper.must(handler.Complete(instances[0].ID))
+	helper.must(handler.Complete(ctx, instances[0].ID))
 	instances = helper.waitForInstances(handler, 30*time.Second, 1)
 
 	helper.section("Check instance ID")
@@ -78,7 +78,7 @@ func TestAll(t *testing.T) {
 	}
 
 	helper.section("Complete second instance and Wait for it to Disappear")
-	helper.must(handler.Complete(instances[0].ID))
+	helper.must(handler.Complete(ctx, instances[0].ID))
 	instances = helper.waitForInstances(handler, 30*time.Second, 0)
 }
 

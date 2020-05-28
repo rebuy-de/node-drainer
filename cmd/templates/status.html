@@ -27,7 +27,7 @@
               <th>Instance Name</th>
               <th>Type</th>
               <th>AZ</th>
-              <th>Livecycle</th>
+              <th>Lifecycle</th>
               <th>State</th>
               <th>Launch Time</th>
             </tr>
@@ -41,7 +41,17 @@
                 <td>{{ .InstanceType }}</td>
                 <td>{{ .AvailabilityZone }}</td>
                 <td>{{ .InstanceLifecycle }}</td>
-                <td>{{ .State }}</td>
+                <td>
+                    {{ if eq .State "running" }}
+                        <span class="badge badge-success">Running</span>
+                    {{ else if eq .State "terminated" }}
+                        <span class="badge badge-danger">Terminated</span>
+                    {{ else if eq .State "pending" }}
+                        <span class="badge badge-info">Pending</span>
+                    {{ else }}
+                        <code>{{ .State }}</code>
+                    {{ end }}
+                </td>
                 <td>{{ .LaunchTime.Format "02 Jan 2006 15:04:05" }}</td>
               </tr>
             {{ end }}

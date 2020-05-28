@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 )
 
@@ -41,22 +41,22 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	handler, err := asg.NewHandler(sess, r.sqsQueue)
 	cmdutil.Must(err)
 
-	ec2Client := aws.NewEC2Client(sess, 10*time.Second)
+	ec2Store := ec2.New(sess, 10*time.Second)
 
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
-		return errors.Wrap(ec2Client.Run(ctx), "failed to run ec2 watcher")
+		return errors.Wrap(ec2Store.Run(ctx), "failed to run ec2 watcher")
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(handler.Run(ctx), "failed to run handler")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(r.runMainLoop(ctx, handler, ec2Client), "failed to run main loop")
+		return errors.Wrap(r.runMainLoop(ctx, handler, ec2Store), "failed to run main loop")
 	})
 	cmdutil.Must(egrp.Wait())
 }
 
-func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2 *aws.EC2Client) error {
+func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2 *ec2.Store) error {
 	l := logrus.WithField("subsystem", "mainloop")
 
 	signaler := syncutil.SignalerFromEmitters(

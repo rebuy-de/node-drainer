@@ -1,4 +1,4 @@
-package asg_test
+package aws_test
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg/tftest"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/tftest"
 )
 
 func TestAll(t *testing.T) {

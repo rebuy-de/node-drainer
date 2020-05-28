@@ -1,7 +1,8 @@
-package aws
+package ec2
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -13,7 +14,7 @@ import (
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
-type EC2Instance struct {
+type Instance struct {
 	InstanceID           string
 	NodeName             string
 	InstanceType         string
@@ -21,44 +22,68 @@ type EC2Instance struct {
 	AvailabilityZone     string
 	InstanceLifecycle    string
 	State                string
+	LaunchTime           time.Time
 }
 
-type EC2Client struct {
+type Store struct {
 	api     *ec2.EC2
 	refresh time.Duration
-	cache   map[string]EC2Instance
+	cache   map[string]Instance
 	emitter *syncutil.SignalEmitter
 }
 
-func NewEC2Client(sess *session.Session, refresh time.Duration) *EC2Client {
-	return &EC2Client{
+func New(sess *session.Session, refresh time.Duration) *Store {
+	return &Store{
 		api:     ec2.New(sess),
 		refresh: refresh,
 		emitter: new(syncutil.SignalEmitter),
 	}
 }
 
-func (c *EC2Client) SignalEmitter() *syncutil.SignalEmitter {
-	return c.emitter
+func (s *Store) SignalEmitter() *syncutil.SignalEmitter {
+	return s.emitter
 }
 
-func (c *EC2Client) Run(ctx context.Context) error {
+func (s *Store) List(filters ...InstanceFilter) []Instance {
+	result := []Instance{}
+
+	for _, instance := range s.cache {
+		filtered := false
+		for _, filter := range filters {
+			filtered = filtered || filter(instance)
+		}
+
+		if filtered {
+			continue
+		}
+
+		result = append(result, instance)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].LaunchTime.Before(result[j].LaunchTime)
+	})
+
+	return result
+}
+
+func (s *Store) Run(ctx context.Context) error {
 	for ctx.Err() == nil {
-		err := c.runOnce(ctx)
+		err := s.runOnce(ctx)
 		if err != nil {
 			return errors.WithStack(err)
 		}
 
-		time.Sleep(c.refresh)
+		time.Sleep(s.refresh)
 	}
 
 	return nil
 }
 
-func (c *EC2Client) runOnce(ctx context.Context) error {
+func (s *Store) runOnce(ctx context.Context) error {
 	ctx = logutil.Start(ctx, "update")
 
-	instances, err := c.fetchInstances(ctx)
+	instances, err := s.fetchInstances(ctx)
 	if err != nil {
 		return errors.Wrap(err, "fetching instances failed")
 	}
@@ -67,7 +92,7 @@ func (c *EC2Client) runOnce(ctx context.Context) error {
 
 	// check whether a new instance was added or an existing was changed
 	for _, instance := range instances {
-		old, ok := c.cache[instance.InstanceID]
+		old, ok := s.cache[instance.InstanceID]
 		if !ok {
 			logutil.Get(ctx).
 				WithFields(logFieldsFromStruct(instance)).
@@ -86,7 +111,7 @@ func (c *EC2Client) runOnce(ctx context.Context) error {
 	}
 
 	// check whether an instance was removed
-	for _, instance := range c.cache {
+	for _, instance := range s.cache {
 		_, ok := instances[instance.InstanceID]
 		if !ok {
 			logutil.Get(ctx).
@@ -98,22 +123,22 @@ func (c *EC2Client) runOnce(ctx context.Context) error {
 	}
 
 	// Replacing the whole map has the advantage that we do not need locking.
-	c.cache = instances
+	s.cache = instances
 
 	// Emitting a signal AFTER refreshing the cache, if anything changed.
 	if changed {
-		c.emitter.Emit()
+		s.emitter.Emit()
 	}
 
 	return nil
 }
 
-func (c *EC2Client) fetchInstances(ctx context.Context) (map[string]EC2Instance, error) {
+func (s *Store) fetchInstances(ctx context.Context) (map[string]Instance, error) {
 	params := &ec2.DescribeInstancesInput{}
-	instances := map[string]EC2Instance{}
+	instances := map[string]Instance{}
 
 	for {
-		resp, err := c.api.DescribeInstances(params)
+		resp, err := s.api.DescribeInstances(params)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
@@ -130,7 +155,7 @@ func (c *EC2Client) fetchInstances(ctx context.Context) (map[string]EC2Instance,
 					continue
 				}
 
-				instances[id] = EC2Instance{
+				instances[id] = Instance{
 					InstanceID:           id,
 					NodeName:             aws.StringValue(dto.PrivateDnsName),
 					State:                aws.StringValue(dto.State.Name),
@@ -138,6 +163,7 @@ func (c *EC2Client) fetchInstances(ctx context.Context) (map[string]EC2Instance,
 					AutoScalingGroupName: ec2tag(dto, "aws:autoscaling:groupName"),
 					AvailabilityZone:     aws.StringValue(dto.Placement.AvailabilityZone),
 					InstanceLifecycle:    aws.StringValue(dto.InstanceLifecycle),
+					LaunchTime:           aws.TimeValue(dto.LaunchTime),
 				}
 			}
 		}

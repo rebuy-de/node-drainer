@@ -1,7 +1,8 @@
 package ec2
 
 const (
-	InstanceStateRunning = "running"
+	InstanceStateRunning    = "running"
+	InstanceStateTerminated = "terminated"
 )
 
 type InstanceFilter func(i Instance) bool

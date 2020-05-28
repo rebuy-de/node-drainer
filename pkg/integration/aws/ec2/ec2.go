@@ -44,19 +44,10 @@ func (s *Store) SignalEmitter() *syncutil.SignalEmitter {
 	return s.emitter
 }
 
-func (s *Store) List(filters ...InstanceFilter) []Instance {
+func (s *Store) List() []Instance {
 	result := []Instance{}
 
 	for _, instance := range s.cache {
-		filtered := false
-		for _, filter := range filters {
-			filtered = filtered || filter(instance)
-		}
-
-		if filtered {
-			continue
-		}
-
 		result = append(result, instance)
 	}
 

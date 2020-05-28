@@ -33,7 +33,7 @@ type Handler interface {
 
 	// List returns all EC2 Instances that are currently in the cache. Those
 	// instance cache will be updated in the background, based on SQS Messages.
-	List() []Instance
+	List(...InstanceSelector) []Instance
 
 	// Complete finishes the ASG Lifecycle Hook Action with "CONTINUE".
 	Complete(ctx context.Context, id string) error
@@ -84,8 +84,9 @@ type handler struct {
 	asg     *autoscaling.AutoScaling
 	sqs     *sqs.SQS
 	url     string
-	cache   map[string]*cacheValue
 	emitter *syncutil.SignalEmitter
+
+	cache map[string]*cacheValue
 }
 
 // NewHandler creates a new Handler for ASG Lifecycle Hooks that are delivered
@@ -189,24 +190,35 @@ func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
 	id := cacheItem.Body.EC2InstanceId
 
 	_, exists := h.cache[id]
-	h.cache[id] = &cacheItem
 
 	if !exists {
-		logutil.Get(ctx).Info("added instance to cache")
+		logutil.Get(ctx).Info("adding instance to cache")
+		h.cache[id] = &cacheItem
 		h.emitter.Emit()
 	}
 
 	return nil
 }
 
-func (h *handler) List() []Instance {
+func (h *handler) List(selectors ...InstanceSelector) []Instance {
 	messages := []Instance{}
 	for _, m := range h.cache {
-		messages = append(messages, Instance{
+		instance := Instance{
 			ID:          m.Body.EC2InstanceId,
 			TriggeredAt: m.Body.Time,
 			CompletedAt: m.completedAt,
-		})
+			DeletedAt:   m.deletedAt,
+		}
+
+		selected := false
+		for _, selector := range selectors {
+			selected = selected || selector(instance)
+		}
+		if !selected {
+			continue
+		}
+
+		messages = append(messages, instance)
 	}
 
 	sort.Slice(messages, func(i, j int) bool {
@@ -225,7 +237,7 @@ func (h *handler) Complete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if message.completedAt.IsZero() {
+	if !message.completedAt.IsZero() {
 		l.Debugf("instance %s already marked as completed", id)
 		return nil
 	}
@@ -265,7 +277,7 @@ func (h *handler) Delete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if cacheItem.deletedAt.IsZero() {
+	if !cacheItem.deletedAt.IsZero() {
 		l.Debugf("instance %s already marked as deleted", id)
 		return nil
 	}

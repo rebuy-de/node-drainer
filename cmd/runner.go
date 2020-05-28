@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -41,7 +42,7 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	handler, err := asg.NewHandler(sess, r.sqsQueue)
 	cmdutil.Must(err)
 
-	ec2Store := ec2.New(sess, 10*time.Second)
+	ec2Store := ec2.New(sess, 1*time.Second)
 
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
@@ -56,45 +57,81 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	cmdutil.Must(egrp.Wait())
 }
 
-func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2 *ec2.Store) error {
-	l := logrus.WithField("subsystem", "mainloop")
+func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store *ec2.Store) error {
+	ctx = logutil.Start(ctx, "mainloop")
+
+	// When do an action inside the loop we exit the loop and restart it. Since
+	// we need to ensure that the loop get run again, we need to signal it.
+	actionTaken := new(syncutil.SignalEmitter)
 
 	signaler := syncutil.SignalerFromEmitters(
+		actionTaken,
 		handler.SignalEmitter(),
-		ec2.SignalEmitter(),
+		ec2Store.SignalEmitter(),
 	)
+
+	stateCache := map[string]string{}
 
 	for ctx.Err() == nil {
 		<-signaler.C(ctx, time.Minute)
 
-		instances := handler.List()
-		if len(instances) == 0 {
-			l.Debug("no instances waiting for shutdown")
-			continue
-		}
+		func() error {
+			ctx := logutil.Start(ctx, "step")
 
-		l.Infof("%d instances are waiting for shutdown", len(instances))
-		for _, instance := range instances {
-			l := l.WithFields(logrus.Fields{
-				"instance-id":  instance.ID,
-				"triggered-at": instance.TriggeredAt,
-				"completed-at": instance.CompletedAt,
-				"deleted-at":   instance.DeletedAt,
-			})
-			l.Debugf("%s is waiting for shutdown", instance.ID)
-		}
+			waitingInstances := handler.List(asg.IsWaiting)
+			if len(waitingInstances) > 0 {
+				logutil.Get(ctx).
+					Infof("%d instances are waiting in the ASG Lifecycle queue", len(waitingInstances))
 
-		instance := instances[0]
-		l.WithFields(logrus.Fields{
-			"instance-id":  instance.ID,
-			"triggered-at": instance.TriggeredAt,
-			"completed-at": instance.CompletedAt,
-			"deleted-at":   instance.DeletedAt,
-		}).Info("marking node as complete")
-		err := handler.Complete(ctx, instance.ID)
-		if err != nil {
-			return errors.Wrap(err, "failed to mark node as complete")
-		}
+				instance := waitingInstances[0]
+				logutil.Get(ctx).
+					WithFields(logrus.Fields{
+						"instance-id":  instance.ID,
+						"triggered-at": instance.TriggeredAt,
+						"completed-at": instance.CompletedAt,
+						"deleted-at":   instance.DeletedAt,
+					}).Info("marking node as complete")
+
+				err := handler.Complete(ctx, instance.ID)
+				if err != nil {
+					return errors.Wrap(err, "failed to mark node as complete")
+				}
+
+				actionTaken.Emit()
+				return nil
+			}
+
+			logutil.Get(ctx).Debug("no instances waiting in the ASG Lifecycle queue")
+
+			for _, instance := range ec2Store.List() {
+				currState := instance.State
+				prevState := stateCache[instance.InstanceID]
+
+				if currState == prevState {
+					continue
+				}
+
+				l := logutil.Get(ctx).WithFields(logrus.Fields{
+					"instance-id": instance.InstanceID,
+				})
+
+				if currState == ec2.InstanceStateTerminated {
+					err := handler.Delete(ctx, instance.InstanceID)
+					if err != nil {
+						return errors.Wrap(err, "failed to mark node as complete")
+					}
+				}
+
+				l.Debugf("instance state changed from '%s' to '%s'", prevState, currState)
+				stateCache[instance.InstanceID] = currState
+				actionTaken.Emit()
+				return nil
+			}
+
+			logutil.Get(ctx).Debug("no instances changed their state")
+
+			return nil
+		}()
 	}
 
 	return nil

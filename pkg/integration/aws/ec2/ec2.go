@@ -154,7 +154,7 @@ func (s *Store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 					AutoScalingGroupName: ec2tag(dto, "aws:autoscaling:groupName"),
 					AvailabilityZone:     aws.StringValue(dto.Placement.AvailabilityZone),
 					InstanceLifecycle:    aws.StringValue(dto.InstanceLifecycle),
-					LaunchTime:           aws.TimeValue(dto.LaunchTime),
+					LaunchTime:           aws.TimeValue(dto.LaunchTime).Local(),
 				}
 			}
 		}

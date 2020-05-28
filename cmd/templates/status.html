@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <title>NodeDrainer</title>
+  </head>
+  <body class="mb-5">
+    <nav class="navbar navbar-expand navbar-dark bg-dark mb-4">
+      <a class="navbar-brand" href="">NodeDrainer</a>
+    </nav>
+
+    <div class="container-fluid">
+        <h1>Status Page</h1>
+
+        <h3>EC2</h3>
+
+        <table class="table table-hover table-sm">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>ASG</th>
+              <th>AZ</th>
+              <th>Livecycle</th>
+              <th>State</th>
+              <th>Launch Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .EC2Instances }}
+              <tr>
+                <td>{{ .InstanceID }}</td>
+                <td>{{ .NodeName }}</td>
+                <td>{{ .InstanceType }}</td>
+                <td>{{ .AutoScalingGroupName }}</td>
+                <td>{{ .AvailabilityZone }}</td>
+                <td>{{ .InstanceLifecycle }}</td>
+                <td>{{ .State }}</td>
+                <td>{{ .LaunchTime.Format "02 Jan 2006 15:04:05" }}</td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
+        <h3>ASG Lifecycle</h3>
+
+        <table class="table table-hover table-sm">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Triggered</th>
+              <th>Completed</th>
+              <th>Deleted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .ASGInstances }}
+              <tr>
+                <td>{{ .ID }}</td>
+                <td>{{ .TriggeredAt.Format "02 Jan 2006 15:04:05" }}</td>
+                <td>{{ .CompletedAt.Format "02 Jan 2006 15:04:05" }}</td>
+                <td>{{ .DeletedAt.Format "02 Jan 2006 15:04:05" }}</td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+    </div>
+  </body>
+</html>

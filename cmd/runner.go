@@ -44,12 +44,20 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 
 	ec2Store := ec2.New(sess, 1*time.Second)
 
+	server := &Server{
+		ec2Store:   ec2Store,
+		asgHandler: handler,
+	}
+
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
 		return errors.Wrap(ec2Store.Run(ctx), "failed to run ec2 watcher")
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(handler.Run(ctx), "failed to run handler")
+	})
+	egrp.Go(func() error {
+		return errors.Wrap(server.Run(ctx), "failed to run server")
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(r.runMainLoop(ctx, handler, ec2Store), "failed to run main loop")

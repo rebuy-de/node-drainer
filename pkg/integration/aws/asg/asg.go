@@ -205,16 +205,16 @@ func (h *handler) List(selectors ...InstanceSelector) []Instance {
 	for _, m := range h.cache {
 		instance := Instance{
 			ID:          m.Body.EC2InstanceId,
-			TriggeredAt: m.Body.Time,
-			CompletedAt: m.completedAt,
-			DeletedAt:   m.deletedAt,
+			TriggeredAt: m.Body.Time.Local(),
+			CompletedAt: m.completedAt.Local(),
+			DeletedAt:   m.deletedAt.Local(),
 		}
 
 		selected := false
 		for _, selector := range selectors {
 			selected = selected || selector(instance)
 		}
-		if !selected {
+		if !selected && len(selectors) > 0 {
 			continue
 		}
 

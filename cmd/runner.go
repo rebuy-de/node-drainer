@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
 )
 
 type Runner struct {
@@ -39,7 +40,12 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	handler, err := asg.NewHandler(sess, r.sqsQueue)
 	cmdutil.Must(err)
 
+	ec2Client := aws.NewEC2Client(sess, 10*time.Second)
+
 	egrp, ctx := errgroup.WithContext(ctx)
+	egrp.Go(func() error {
+		return errors.Wrap(ec2Client.Run(ctx), "failed to run ec2 watcher")
+	})
 	egrp.Go(func() error {
 		return errors.Wrap(handler.Run(ctx), "failed to run handler")
 	})

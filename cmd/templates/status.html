@@ -17,6 +17,29 @@
     <div class="container-fluid">
         <h1>Status Page</h1>
 
+        <h3>ASG Lifecycle</h3>
+
+        <table class="table table-hover table-sm">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Triggered</th>
+              <th>Completed</th>
+              <th>Deleted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .ASGInstances }}
+              <tr>
+                <td>{{ .ID }}</td>
+                <td>{{ .TriggeredAt.Format "02 Jan 2006 15:04:05" }}</td>
+                <td>{{ .CompletedAt.Format "02 Jan 2006 15:04:05" }}</td>
+                <td>{{ .DeletedAt.Format "02 Jan 2006 15:04:05" }}</td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
         <h3>EC2</h3>
 
         <table class="table table-hover table-sm">
@@ -58,28 +81,6 @@
           </tbody>
         </table>
 
-        <h3>ASG Lifecycle</h3>
-
-        <table class="table table-hover table-sm">
-          <thead>
-            <tr>
-              <th>Instance ID</th>
-              <th>Triggered</th>
-              <th>Completed</th>
-              <th>Deleted</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{ range .ASGInstances }}
-              <tr>
-                <td>{{ .ID }}</td>
-                <td>{{ .TriggeredAt.Format "02 Jan 2006 15:04:05" }}</td>
-                <td>{{ .CompletedAt.Format "02 Jan 2006 15:04:05" }}</td>
-                <td>{{ .DeletedAt.Format "02 Jan 2006 15:04:05" }}</td>
-              </tr>
-            {{ end }}
-          </tbody>
-        </table>
     </div>
   </body>
 </html>

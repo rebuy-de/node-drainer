@@ -24,6 +24,7 @@ type Instance struct {
 	InstanceLifecycle    string
 	State                string
 	LaunchTime           time.Time
+	TerminationTime      *time.Time
 }
 
 type Store struct {
@@ -155,7 +156,7 @@ func (s *Store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 					continue
 				}
 
-				instances[id] = Instance{
+				instance := Instance{
 					InstanceID:        id,
 					HostName:          aws.StringValue(dto.PrivateDnsName),
 					State:             aws.StringValue(dto.State.Name),
@@ -165,6 +166,26 @@ func (s *Store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 					InstanceLifecycle: aws.StringValue(dto.InstanceLifecycle),
 					LaunchTime:        aws.TimeValue(dto.LaunchTime).Local(),
 				}
+
+				if instance.State == InstanceStateTerminated || instance.State == InstanceStateShuttingDown {
+					// Parsing the termination date from the
+					// StateTransitionReason is not very reliable, since it is
+					// not standarized and we do tolarate other reasons. This
+					// is fine, since we use it only for displaying purposes.
+					// If we need a reliable value, we would need to get it
+					// from CloudTrail.
+					terminationTime, err := time.Parse("User initiated (2006-01-02 15:04:05 MST)", aws.StringValue(dto.StateTransitionReason))
+					if err != nil {
+						logutil.Get(ctx).
+							WithField("state-transition-reason", dto.StateTransitionReason).
+							WithError(errors.WithStack(err)).
+							Warn("failed to parse state transition reason")
+					} else {
+						instance.TerminationTime = &terminationTime
+					}
+				}
+
+				instances[id] = instance
 			}
 		}
 

@@ -4,9 +4,11 @@ import (
 	"context"
 	"net/http"
 	"text/template"
+	"time"
 
 	"github.com/gobuffalo/packr/v2"
 	"github.com/julienschmidt/httprouter"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/webutil"
 
@@ -45,6 +47,27 @@ func (s *Server) respondTemplate(w http.ResponseWriter, r *http.Request, name st
 	templateBox := packr.New("templates", "./templates")
 
 	t := template.New("")
+
+	t = t.Funcs(template.FuncMap{
+		"PrettyTime": func(value interface{}) (string, error) {
+			tPtr, ok := value.(*time.Time)
+			if ok {
+				if tPtr == nil {
+					return "N/A", nil
+				}
+				value = *tPtr
+			}
+
+			t, ok := value.(time.Time)
+			if !ok {
+				return "", errors.Errorf("unexpected type")
+			}
+
+			format := "Mon, 2 Jan 15:04:05"
+			return t.Format(format), nil
+		},
+	})
+
 	err := templateBox.Walk(func(name string, file packr.File) error {
 		var err error
 		t = t.New(name)

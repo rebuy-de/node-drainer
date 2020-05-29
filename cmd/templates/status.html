@@ -53,6 +53,7 @@
               <th>Lifecycle</th>
               <th>State</th>
               <th>Launch Time</th>
+              <th>Termination Time</th>
             </tr>
           </thead>
           <tbody>
@@ -69,13 +70,16 @@
                         <span class="badge badge-success">Running</span>
                     {{ else if eq .State "terminated" }}
                         <span class="badge badge-danger">Terminated</span>
+                    {{ else if eq .State "shutting-down" }}
+                        <span class="badge badge-warning">Shutting Down</span>
                     {{ else if eq .State "pending" }}
                         <span class="badge badge-info">Pending</span>
                     {{ else }}
                         <code>{{ .State }}</code>
                     {{ end }}
                 </td>
-                <td>{{ .LaunchTime.Format "02 Jan 2006 15:04:05" }}</td>
+                <td>{{ PrettyTime .LaunchTime }}</td>
+                <td>{{ PrettyTime .TerminationTime }}</td>
               </tr>
             {{ end }}
           </tbody>

@@ -164,7 +164,7 @@ func (s *Store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 					InstanceName:      ec2tag(dto, "Name"),
 					AvailabilityZone:  aws.StringValue(dto.Placement.AvailabilityZone),
 					InstanceLifecycle: aws.StringValue(dto.InstanceLifecycle),
-					LaunchTime:        aws.TimeValue(dto.LaunchTime).Local(),
+					LaunchTime:        aws.TimeValue(dto.LaunchTime),
 				}
 
 				if instance.State == InstanceStateTerminated || instance.State == InstanceStateShuttingDown {

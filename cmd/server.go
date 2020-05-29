@@ -63,6 +63,10 @@ func (s *Server) respondTemplate(w http.ResponseWriter, r *http.Request, name st
 				return "", errors.Errorf("unexpected type")
 			}
 
+			if t.IsZero() {
+				return "N/A", nil
+			}
+
 			format := "Mon, 2 Jan 15:04:05"
 			return t.Format(format), nil
 		},

@@ -38,9 +38,9 @@
             {{ range .ASGInstances }}
               <tr>
                 <td>{{ .ID }}</td>
-                <td>{{ .TriggeredAt.Format "02 Jan 2006 15:04:05" }}</td>
-                <td>{{ .CompletedAt.Format "02 Jan 2006 15:04:05" }}</td>
-                <td>{{ .DeletedAt.Format "02 Jan 2006 15:04:05" }}</td>
+                <td>{{ PrettyTime .TriggeredAt }}</td>
+                <td>{{ PrettyTime .CompletedAt }}</td>
+                <td>{{ PrettyTime .DeletedAt }}</td>
               </tr>
             {{ end }}
           </tbody>

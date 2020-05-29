@@ -8,13 +8,19 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
 
     <title>NodeDrainer</title>
+
+    <style>
+        table.table-wide td, table.table-wide th {
+            white-space:nowrap;
+        }
+    </style>
   </head>
   <body class="mb-5">
     <nav class="navbar navbar-expand navbar-dark bg-dark mb-4">
       <a class="navbar-brand" href="">NodeDrainer</a>
     </nav>
 
-    <div class="container-fluid">
+    <div class="container">
         <h1>Status Page</h1>
 
         <h3>ASG Lifecycle</h3>
@@ -42,7 +48,7 @@
 
         <h3>EC2</h3>
 
-        <table class="table table-hover table-sm">
+        <table class="table table-hover table-sm table-wide">
           <thead>
             <tr>
               <th>Instance ID</th>

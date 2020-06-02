@@ -133,7 +133,7 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 				//	}
 				//}
 
-				l.Debugf("instance state changed from '%s' to '%s'", prevState, currState)
+				l.Infof("instance state changed from '%s' to '%s'", prevState, currState)
 				stateCache[instance.InstanceID] = currState
 
 				// Safe action that does not need a loop-restart.
@@ -141,13 +141,14 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 			}
 
 			// Clean up old messages
-			for _, instance := range combined.Filter(aws.HasEC2Data).Filter(aws.HasLifecycleMessage) {
+			for _, instance := range combined.Filter(aws.HasEC2Data).Select(aws.HasLifecycleMessage) {
 				l := logutil.Get(ctx).
 					WithFields(logFieldsFromStruct(instance))
 				age := time.Since(instance.ASG.TriggeredAt)
 				if age < 30*time.Minute {
 					l.Warnf("termination time of %s was triggered just %v ago, assuming that the cache was empty",
 						instance.InstanceID, age)
+					actionTaken.Emit() // we need to retry
 					continue
 				}
 
@@ -155,6 +156,8 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 				if err != nil {
 					return errors.Wrap(err, "failed to delete message")
 				}
+
+				l.Info("deleted lifecycle message from SQS")
 
 				// Safe action that does not need a loop-restart.
 				actionTaken.Emit()

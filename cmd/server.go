@@ -44,7 +44,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data.EC2Instances = s.ec2Store.List()
 	data.Combined = aws.CombineInstances(
 		data.ASGInstances, data.EC2Instances,
-	).Sort(aws.ByInstanceID).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
+	).Select(aws.HasLifecycleMessage).
+		Sort(aws.ByInstanceID).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
 
 	s.respondTemplate(w, r, "status.html", data)
 }

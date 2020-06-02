@@ -64,7 +64,7 @@ type cacheValue struct {
 	ReceiptHandle string
 	Body          messageBody
 	completed     bool
-	deleted       bool
+	deletedAt     time.Time
 }
 
 type messageBody struct {
@@ -152,6 +152,15 @@ func (h *handler) Run(ctx context.Context) error {
 				}
 			}
 		}
+
+		for key, value := range h.cache {
+			// We delete the deletion from the cache, to give SQS time to
+			// propagate the deletion and prevent that it gets readded to the
+			// chache.
+			if !value.deletedAt.IsZero() && time.Since(value.deletedAt) > 5*time.Minute {
+				delete(h.cache, key)
+			}
+		}
 	}
 }
 
@@ -207,7 +216,7 @@ func (h *handler) List() []Instance {
 			ID:          m.Body.EC2InstanceId,
 			TriggeredAt: m.Body.Time,
 			Completed:   m.completed,
-			Deleted:     m.deleted,
+			Deleted:     !m.deletedAt.IsZero(),
 		}
 
 		messages = append(messages, instance)
@@ -229,7 +238,7 @@ func (h *handler) Complete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if message.deleted {
+	if message.completed {
 		l.Debugf("instance %s already marked as completed", id)
 		return nil
 	}
@@ -269,7 +278,7 @@ func (h *handler) Delete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if cacheItem.deleted {
+	if !cacheItem.deletedAt.IsZero() {
 		l.Debugf("instance %s already marked as deleted", id)
 		return nil
 	}
@@ -282,7 +291,7 @@ func (h *handler) Delete(ctx context.Context, id string) error {
 		return errors.WithStack(err)
 	}
 
-	cacheItem.deleted = true
+	cacheItem.deletedAt = time.Now()
 	h.emitter.Emit()
 
 	return nil

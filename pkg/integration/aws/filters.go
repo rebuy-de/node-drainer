@@ -29,6 +29,10 @@ func HasEC2Data(i *Instance) bool {
 	return i != nil && i.EC2.InstanceID != ""
 }
 
+func HasASGData(i *Instance) bool {
+	return i != nil && i.ASG.ID != ""
+}
+
 func HasLifecycleMessage(i *Instance) bool {
-	return !i.ASG.Deleted
+	return HasASGData(i) && i.ASG.Deleted == false
 }

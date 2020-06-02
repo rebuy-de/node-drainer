@@ -41,3 +41,13 @@ func (instances Instances) Select(selector Selector) Instances {
 	}
 	return result
 }
+
+func (instances Instances) Filter(selector Selector) Instances {
+	result := Instances{}
+	for _, i := range instances {
+		if !selector(&i) {
+			result = append(result, i)
+		}
+	}
+	return result
+}

@@ -140,6 +140,26 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 				actionTaken.Emit()
 			}
 
+			// Clean up old messages
+			for _, instance := range combined.Filter(aws.HasEC2Data).Filter(aws.HasLifecycleMessage) {
+				l := logutil.Get(ctx).
+					WithFields(logFieldsFromStruct(instance))
+				age := time.Since(instance.ASG.TriggeredAt)
+				if age < 30*time.Minute {
+					l.Warnf("termination time of %s was triggered just %v ago, assuming that the cache was empty",
+						instance.InstanceID, age)
+					continue
+				}
+
+				err := handler.Delete(ctx, instance.InstanceID)
+				if err != nil {
+					return errors.Wrap(err, "failed to delete message")
+				}
+
+				// Safe action that does not need a loop-restart.
+				actionTaken.Emit()
+			}
+
 			return nil
 		}()
 

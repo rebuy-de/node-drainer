@@ -14,6 +14,12 @@ import (
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
+const (
+	InstanceStateRunning      = "running"
+	InstanceStateTerminated   = "terminated"
+	InstanceStateShuttingDown = "shutting-down"
+)
+
 type Instance struct {
 	InstanceID           string
 	InstanceName         string

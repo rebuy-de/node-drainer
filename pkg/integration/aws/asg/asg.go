@@ -33,7 +33,7 @@ type Handler interface {
 
 	// List returns all EC2 Instances that are currently in the cache. Those
 	// instance cache will be updated in the background, based on SQS Messages.
-	List(...InstanceSelector) []Instance
+	List() []Instance
 
 	// Complete finishes the ASG Lifecycle Hook Action with "CONTINUE".
 	Complete(ctx context.Context, id string) error
@@ -200,7 +200,7 @@ func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
 	return nil
 }
 
-func (h *handler) List(selectors ...InstanceSelector) []Instance {
+func (h *handler) List() []Instance {
 	messages := []Instance{}
 	for _, m := range h.cache {
 		instance := Instance{
@@ -208,14 +208,6 @@ func (h *handler) List(selectors ...InstanceSelector) []Instance {
 			TriggeredAt: m.Body.Time,
 			Completed:   m.completed,
 			Deleted:     m.deleted,
-		}
-
-		selected := false
-		for _, selector := range selectors {
-			selected = selected || selector(instance)
-		}
-		if !selected && len(selectors) > 0 {
-			continue
 		}
 
 		messages = append(messages, instance)

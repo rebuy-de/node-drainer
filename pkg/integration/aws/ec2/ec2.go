@@ -21,16 +21,16 @@ const (
 )
 
 type Instance struct {
-	InstanceID           string
-	InstanceName         string
-	HostName             string
-	InstanceType         string
-	AutoScalingGroupName string
-	AvailabilityZone     string
-	InstanceLifecycle    string
-	State                string
-	LaunchTime           time.Time
-	TerminationTime      *time.Time
+	InstanceID           string     `logfield:"instance-id"`
+	InstanceName         string     `logfield:"instance-name"`
+	HostName             string     `logfield:"node-name"`
+	InstanceType         string     `logfield:"instance-type"`
+	AutoScalingGroupName string     `logfield:"autoscaling-group-name"`
+	AvailabilityZone     string     `logfield:"availability-zone"`
+	InstanceLifecycle    string     `logfield:"instance-lifecycle"`
+	State                string     `logfield:"instance-state"`
+	LaunchTime           time.Time  `logfield:"launch-time"`
+	TerminationTime      *time.Time `logfield:"termination-time,omitempty"`
 }
 
 func (i Instance) Changed(old Instance) bool {

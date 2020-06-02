@@ -46,17 +46,17 @@ type Handler interface {
 
 type Instance struct {
 	// ID is the EC2 Instance ID
-	ID string
+	ID string `logfield:"instance-id"`
 
 	// TriggeredAt is the thime then the shutdown was triggered.
-	TriggeredAt time.Time
+	TriggeredAt time.Time `logfield:"triggered-at"`
 
 	// CompletedAt is the time when Complete() was called.
-	Completed bool
+	Completed bool `logfield:"completed"`
 
 	// DeletedAt is the time when Delete() was called. Deleted instaces get
 	// deleted after one hour.
-	Deleted bool
+	Deleted bool `logfield:"deleted"`
 }
 
 type cacheValue struct {

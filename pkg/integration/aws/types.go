@@ -8,10 +8,10 @@ import (
 )
 
 type Instance struct {
-	InstanceID string
+	InstanceID string `logfield:"instance-id"`
 
-	ASG asg.Instance
-	EC2 ec2.Instance
+	ASG asg.Instance `logfield:",squash"`
+	EC2 ec2.Instance `logfield:",squash"`
 }
 
 type Instances []Instance

@@ -27,6 +27,10 @@ type Instance struct {
 	TerminationTime      *time.Time
 }
 
+func (i Instance) Changed(old Instance) bool {
+	return i.State != old.State
+}
+
 type Store struct {
 	api     *ec2.EC2
 	refresh time.Duration
@@ -102,7 +106,7 @@ func (s *Store) runOnce(ctx context.Context) error {
 			continue
 		}
 
-		if old != instance {
+		if instance.Changed(old) {
 			logutil.Get(ctx).
 				WithFields(logFieldsFromStruct(instance)).
 				Debugf("cached instance changed")

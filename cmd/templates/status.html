@@ -23,9 +23,50 @@
     <div class="container">
         <h1>Status Page</h1>
 
+        <h3>Combined</h3>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Host Name</th>
+              <th>Instance Name</th>
+              <th>State</th>
+              <th>Launch Time</th>
+              <th>Triggered At</th>
+              <th>Termination Time</th>
+            </tr>
+          </thead>
+          <tbody>
+              {{ range .Combined }}
+              <tr>
+                <td>{{ .InstanceID }}</td>
+                <td>{{ .EC2.HostName }}</td>
+                <td>{{ .EC2.InstanceName }}</td>
+                <td>
+                    {{ if eq .EC2.State "running" }}
+                        <span class="badge badge-success">Running</span>
+                    {{ else if eq .EC2.State "terminated" }}
+                        <span class="badge badge-danger">Terminated</span>
+                    {{ else if eq .EC2.State "shutting-down" }}
+                        <span class="badge badge-warning">Shutting Down</span>
+                    {{ else if eq .EC2.State "pending" }}
+                        <span class="badge badge-info">Pending</span>
+                    {{ else }}
+                        <code>{{ .EC2.State }}</code>
+                    {{ end }}
+                </td>
+                <td>{{ PrettyTime .EC2.LaunchTime }}</td>
+                <td>{{ PrettyTime .ASG.TriggeredAt }}</td>
+                <td>{{ PrettyTime .EC2.TerminationTime }}</td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
         <h3>ASG Lifecycle</h3>
 
-        <table class="table table-hover table-sm">
+        <table class="table table-hover table-sm table-wide">
           <thead>
             <tr>
               <th>Instance ID</th>
@@ -39,8 +80,20 @@
               <tr>
                 <td>{{ .ID }}</td>
                 <td>{{ PrettyTime .TriggeredAt }}</td>
-                <td>{{ PrettyTime .CompletedAt }}</td>
-                <td>{{ PrettyTime .DeletedAt }}</td>
+                <td>
+                    {{ if .Completed }}
+                        <span class="badge badge-success">yes</span>
+                    {{ else }}
+                        <span class="badge badge-info">no</span>
+                    {{ end }}
+                </td>
+                <td>
+                    {{ if .Deleted }}
+                        <span class="badge badge-success">yes</span>
+                    {{ else }}
+                        <span class="badge badge-info">no</span>
+                    {{ end }}
+                </td>
               </tr>
             {{ end }}
           </tbody>

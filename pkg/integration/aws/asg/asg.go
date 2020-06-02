@@ -52,19 +52,19 @@ type Instance struct {
 	TriggeredAt time.Time
 
 	// CompletedAt is the time when Complete() was called.
-	CompletedAt time.Time
+	Completed bool
 
 	// DeletedAt is the time when Delete() was called. Deleted instaces get
 	// deleted after one hour.
-	DeletedAt time.Time
+	Deleted bool
 }
 
 type cacheValue struct {
 	MessageId     string
 	ReceiptHandle string
 	Body          messageBody
-	completedAt   time.Time
-	deletedAt     time.Time
+	completed     bool
+	deleted       bool
 }
 
 type messageBody struct {
@@ -206,8 +206,8 @@ func (h *handler) List(selectors ...InstanceSelector) []Instance {
 		instance := Instance{
 			ID:          m.Body.EC2InstanceId,
 			TriggeredAt: m.Body.Time,
-			CompletedAt: m.completedAt,
-			DeletedAt:   m.deletedAt,
+			Completed:   m.completed,
+			Deleted:     m.deleted,
 		}
 
 		selected := false
@@ -237,7 +237,7 @@ func (h *handler) Complete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if !message.completedAt.IsZero() {
+	if message.deleted {
 		l.Debugf("instance %s already marked as completed", id)
 		return nil
 	}
@@ -262,7 +262,7 @@ func (h *handler) Complete(ctx context.Context, id string) error {
 	// failsafe. Anyway, it gets marked as completed in the cache to avoid a
 	// stale List() output which could cause a unnecessary delay in the main
 	// loop.
-	message.completedAt = time.Now()
+	message.completed = true
 	h.emitter.Emit()
 
 	return nil
@@ -277,7 +277,7 @@ func (h *handler) Delete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	if !cacheItem.deletedAt.IsZero() {
+	if cacheItem.deleted {
 		l.Debugf("instance %s already marked as deleted", id)
 		return nil
 	}
@@ -290,7 +290,7 @@ func (h *handler) Delete(ctx context.Context, id string) error {
 		return errors.WithStack(err)
 	}
 
-	cacheItem.deletedAt = time.Now()
+	cacheItem.deleted = true
 	h.emitter.Emit()
 
 	return nil

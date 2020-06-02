@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/webutil"
 
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 )
@@ -35,10 +36,15 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data := struct {
 		ASGInstances []asg.Instance
 		EC2Instances []ec2.Instance
-	}{
-		ASGInstances: s.asgHandler.List(),
-		EC2Instances: s.ec2Store.List(),
-	}
+
+		Combined aws.Instances
+	}{}
+
+	data.ASGInstances = s.asgHandler.List()
+	data.EC2Instances = s.ec2Store.List()
+	data.Combined = aws.CombineInstances(
+		data.ASGInstances, data.EC2Instances,
+	).Sort(aws.ByInstanceID).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
 
 	s.respondTemplate(w, r, "status.html", data)
 }
@@ -68,7 +74,7 @@ func (s *Server) respondTemplate(w http.ResponseWriter, r *http.Request, name st
 			}
 
 			format := "Mon, 2 Jan 15:04:05"
-			return t.Format(format), nil
+			return t.Local().Format(format), nil
 		},
 	})
 

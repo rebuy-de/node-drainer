@@ -6,6 +6,7 @@ const (
 	InstanceStateShuttingDown = "shutting-down"
 )
 
+// Deprecated
 type InstanceFilter func(i Instance) bool
 
 func IsRunning(i Instance) bool {

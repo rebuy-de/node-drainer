@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
@@ -84,63 +86,82 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 		<-signaler.C(ctx, time.Minute)
 
 		func() error {
-			ctx := logutil.Start(ctx, "step")
+			ctx := logutil.Start(ctx, "loop")
 
-			waitingInstances := handler.List(asg.IsWaiting)
-			if len(waitingInstances) > 0 {
+			combined := aws.CombineInstances(
+				handler.List(),
+				ec2Store.List(),
+			).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
+
+			// Mark all instances as complete immediately.
+			for _, instance := range combined.Select(aws.IsWaiting) {
 				logutil.Get(ctx).
-					Infof("%d instances are waiting in the ASG Lifecycle queue", len(waitingInstances))
+					WithFields(logFieldsFromStruct(instance)).
+					Info("marking node as complete")
 
-				instance := waitingInstances[0]
-				logutil.Get(ctx).
-					WithFields(logrus.Fields{
-						"instance-id":  instance.ID,
-						"triggered-at": instance.TriggeredAt,
-						"completed-at": instance.CompletedAt,
-						"deleted-at":   instance.DeletedAt,
-					}).Info("marking node as complete")
-
-				err := handler.Complete(ctx, instance.ID)
+				err := handler.Complete(ctx, instance.InstanceID)
 				if err != nil {
 					return errors.Wrap(err, "failed to mark node as complete")
 				}
 
+				// Safe action that does not need a loop-restart.
 				actionTaken.Emit()
-				return nil
 			}
 
-			logutil.Get(ctx).Debug("no instances waiting in the ASG Lifecycle queue")
-
-			for _, instance := range ec2Store.List() {
-				currState := instance.State
+			// Tell instrumentation that an instance state changed.
+			for _, instance := range combined {
+				currState := instance.EC2.State
 				prevState := stateCache[instance.InstanceID]
 
 				if currState == prevState {
 					continue
 				}
 
-				l := logutil.Get(ctx).WithFields(logrus.Fields{
-					"instance-id": instance.InstanceID,
-				})
-
-				if currState == ec2.InstanceStateTerminated {
-					err := handler.Delete(ctx, instance.InstanceID)
-					if err != nil {
-						return errors.Wrap(err, "failed to mark node as complete")
-					}
+				if prevState == "" {
+					// It means there is no previous state. This might happen
+					// after a restart.
+					continue
 				}
+
+				l := logutil.Get(ctx).
+					WithFields(logFieldsFromStruct(instance))
+
+				//if currState == ec2.InstanceStateTerminated {
+				//	err := handler.Delete(ctx, instance.InstanceID)
+				//	if err != nil {
+				//		return errors.Wrap(err, "failed to mark node as complete")
+				//	}
+				//}
 
 				l.Debugf("instance state changed from '%s' to '%s'", prevState, currState)
 				stateCache[instance.InstanceID] = currState
-				actionTaken.Emit()
-				return nil
-			}
 
-			logutil.Get(ctx).Debug("no instances changed their state")
+				// Safe action that does not need a loop-restart.
+				actionTaken.Emit()
+			}
 
 			return nil
 		}()
+
 	}
 
 	return nil
+}
+
+func logFieldsFromStruct(s interface{}) logrus.Fields {
+	fields := logrus.Fields{}
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName: "logfield",
+		Result:  &fields,
+	})
+	if err != nil {
+		return logrus.Fields{"logfield-error": err}
+	}
+
+	err = dec.Decode(s)
+	if err != nil {
+		return logrus.Fields{"logfield-error": err}
+	}
+
+	return fields
 }

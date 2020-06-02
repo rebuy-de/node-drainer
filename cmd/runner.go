@@ -80,6 +80,16 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 		ec2Store.SignalEmitter(),
 	)
 
+	logutil.Get(ctx).Debug("waiting for EC2 cache to warm up")
+	for ctx.Err() == nil {
+		if len(ec2Store.List()) > 0 {
+			break
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+	logutil.Get(ctx).Debug("waiting for EC2 cache done")
+
 	stateCache := map[string]string{}
 
 	for ctx.Err() == nil {

@@ -113,6 +113,8 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 				currState := instance.EC2.State
 				prevState := stateCache[instance.InstanceID]
 
+				stateCache[instance.InstanceID] = currState
+
 				if currState == prevState {
 					continue
 				}
@@ -126,15 +128,14 @@ func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store 
 				l := logutil.Get(ctx).
 					WithFields(logFieldsFromStruct(instance))
 
-				//if currState == ec2.InstanceStateTerminated {
-				//	err := handler.Delete(ctx, instance.InstanceID)
-				//	if err != nil {
-				//		return errors.Wrap(err, "failed to mark node as complete")
-				//	}
-				//}
-
 				l.Infof("instance state changed from '%s' to '%s'", prevState, currState)
-				stateCache[instance.InstanceID] = currState
+
+				if currState == ec2.InstanceStateTerminated {
+					l.Infof(
+						"instance drainage took %v",
+						instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt),
+					)
+				}
 
 				// Safe action that does not need a loop-restart.
 				actionTaken.Emit()

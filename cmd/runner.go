@@ -8,15 +8,12 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
-	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 )
 
 type Runner struct {
@@ -51,6 +48,8 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 		asgHandler: handler,
 	}
 
+	mainLoop := NewMainLoop(handler, ec2Store)
+
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
 		return errors.Wrap(ec2Store.Run(ctx), "failed to run ec2 watcher")
@@ -62,124 +61,9 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 		return errors.Wrap(server.Run(ctx), "failed to run server")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(r.runMainLoop(ctx, handler, ec2Store), "failed to run main loop")
+		return errors.Wrap(mainLoop.Run(ctx), "failed to run main loop")
 	})
 	cmdutil.Must(egrp.Wait())
-}
-
-func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler, ec2Store *ec2.Store) error {
-	ctx = logutil.Start(ctx, "mainloop")
-
-	// When do an action inside the loop we exit the loop and restart it. Since
-	// we need to ensure that the loop get run again, we need to signal it.
-	actionTaken := new(syncutil.SignalEmitter)
-
-	signaler := syncutil.SignalerFromEmitters(
-		actionTaken,
-		handler.SignalEmitter(),
-		ec2Store.SignalEmitter(),
-	)
-
-	logutil.Get(ctx).Debug("waiting for EC2 cache to warm up")
-	for ctx.Err() == nil {
-		if len(ec2Store.List()) > 0 {
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-	logutil.Get(ctx).Debug("waiting for EC2 cache done")
-
-	stateCache := map[string]string{}
-
-	for ctx.Err() == nil {
-		<-signaler.C(ctx, time.Minute)
-
-		func() error {
-			ctx := logutil.Start(ctx, "loop")
-
-			combined := aws.CombineInstances(
-				handler.List(),
-				ec2Store.List(),
-			).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
-
-			// Mark all instances as complete immediately.
-			for _, instance := range combined.Select(aws.IsWaiting) {
-				logutil.Get(ctx).
-					WithFields(logFieldsFromStruct(instance)).
-					Info("marking node as complete")
-
-				err := handler.Complete(ctx, instance.InstanceID)
-				if err != nil {
-					return errors.Wrap(err, "failed to mark node as complete")
-				}
-
-				// Safe action that does not need a loop-restart.
-				actionTaken.Emit()
-			}
-
-			// Tell instrumentation that an instance state changed.
-			for _, instance := range combined {
-				currState := instance.EC2.State
-				prevState := stateCache[instance.InstanceID]
-
-				stateCache[instance.InstanceID] = currState
-
-				if currState == prevState {
-					continue
-				}
-
-				if prevState == "" {
-					// It means there is no previous state. This might happen
-					// after a restart.
-					continue
-				}
-
-				l := logutil.Get(ctx).
-					WithFields(logFieldsFromStruct(instance))
-
-				l.Infof("instance state changed from '%s' to '%s'", prevState, currState)
-
-				if currState == ec2.InstanceStateTerminated {
-					l.Infof(
-						"instance drainage took %v",
-						instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt),
-					)
-				}
-
-				// Safe action that does not need a loop-restart.
-				actionTaken.Emit()
-			}
-
-			// Clean up old messages
-			for _, instance := range combined.Filter(aws.HasEC2Data).Select(aws.HasLifecycleMessage) {
-				l := logutil.Get(ctx).
-					WithFields(logFieldsFromStruct(instance))
-				age := time.Since(instance.ASG.TriggeredAt)
-				if age < 30*time.Minute {
-					l.Warnf("termination time of %s was triggered just %v ago, assuming that the cache was empty",
-						instance.InstanceID, age)
-					actionTaken.Emit() // we need to retry
-					continue
-				}
-
-				err := handler.Delete(ctx, instance.InstanceID)
-				if err != nil {
-					return errors.Wrap(err, "failed to delete message")
-				}
-
-				l.Info("deleted lifecycle message from SQS")
-
-				// Safe action that does not need a loop-restart.
-				actionTaken.Emit()
-			}
-
-			return nil
-		}()
-
-	}
-
-	return nil
 }
 
 func logFieldsFromStruct(s interface{}) logrus.Fields {

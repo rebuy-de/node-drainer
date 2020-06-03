@@ -42,6 +42,8 @@ type Client interface {
 	Delete(ctx context.Context, id string) error
 
 	SignalEmitter() *syncutil.SignalEmitter
+
+	Healthy() bool
 }
 
 type Instance struct {
@@ -87,6 +89,8 @@ type handler struct {
 	emitter *syncutil.SignalEmitter
 
 	cache map[string]*cacheValue
+
+	failureCount int
 }
 
 // NewHandler creates a new Handler for ASG Lifecycle Hooks that are delivered
@@ -110,12 +114,16 @@ func New(sess *session.Session, queueName string) (Client, error) {
 	}, nil
 }
 
+func (h *handler) Healthy() bool {
+	return h.failureCount == 0
+}
+
 func (h *handler) SignalEmitter() *syncutil.SignalEmitter {
 	return h.emitter
 }
 
 func (h *handler) Run(ctx context.Context) error {
-	ctx = logutil.Start(ctx, "asglifecycle")
+	ctx = logutil.Start(ctx, "asgclient")
 
 	for {
 		select {
@@ -123,33 +131,17 @@ func (h *handler) Run(ctx context.Context) error {
 			return nil
 
 		default:
-			result, err := h.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-				AttributeNames: []*string{
-					aws.String("All"),
-				},
-				MessageAttributeNames: []*string{
-					aws.String(sqs.QueueAttributeNameAll),
-				},
-				QueueUrl:            aws.String(h.url),
-				MaxNumberOfMessages: aws.Int64(10),
-				VisibilityTimeout:   aws.Int64(20),
-				WaitTimeSeconds:     aws.Int64(10),
-			})
+			err := h.runOnce(ctx)
 			if err != nil {
-				aerr, ok := err.(awserr.Error)
-				if ok && aerr.Code() == request.CanceledErrorCode {
-					// This is a graceful shutdown, triggered by the context
-					// and not an actual error.
-					return nil
-				}
-				return errors.Wrap(err, "failed to receive message from SQS")
-			}
+				logutil.Get(ctx).
+					WithError(errors.WithStack(err)).
+					Errorf("main loop run failed %d times in a row", h.failureCount)
+				h.failureCount++
 
-			for _, message := range result.Messages {
-				err := h.handle(ctx, message)
-				if err != nil {
-					return errors.Wrap(err, "failed handle message")
-				}
+				// Sleep shortly because we do not want to DoS our logging system.
+				time.Sleep(100 * time.Millisecond)
+			} else {
+				h.failureCount = 0
 			}
 		}
 
@@ -162,6 +154,39 @@ func (h *handler) Run(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (h *handler) runOnce(ctx context.Context) error {
+	result, err := h.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
+		AttributeNames: []*string{
+			aws.String("All"),
+		},
+		MessageAttributeNames: []*string{
+			aws.String(sqs.QueueAttributeNameAll),
+		},
+		QueueUrl:            aws.String(h.url),
+		MaxNumberOfMessages: aws.Int64(10),
+		VisibilityTimeout:   aws.Int64(20),
+		WaitTimeSeconds:     aws.Int64(10),
+	})
+	if err != nil {
+		aerr, ok := err.(awserr.Error)
+		if ok && aerr.Code() == request.CanceledErrorCode {
+			// This is a graceful shutdown, triggered by the context
+			// and not an actual error.
+			return nil
+		}
+		return errors.Wrap(err, "failed to receive message from SQS")
+	}
+
+	for _, message := range result.Messages {
+		err := h.handle(ctx, message)
+		if err != nil {
+			return errors.Wrap(err, "failed handle message")
+		}
+	}
+
+	return nil
 }
 
 func (h *handler) handle(ctx context.Context, message *sqs.Message) error {

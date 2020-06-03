@@ -17,6 +17,8 @@ type MainLoop struct {
 	triggerLoop *syncutil.SignalEmitter
 	signaler    syncutil.Signaler
 
+	failureCount int
+
 	asg asg.Client
 	ec2 ec2.Client
 }
@@ -38,6 +40,10 @@ func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client) *MainLoop {
 	return ml
 }
 
+func (l *MainLoop) Healthy() bool {
+	return l.failureCount == 0
+}
+
 func (l *MainLoop) Run(ctx context.Context) error {
 	ctx = logutil.Start(ctx, "mainloop")
 
@@ -56,10 +62,13 @@ func (l *MainLoop) Run(ctx context.Context) error {
 		if err != nil {
 			logutil.Get(ctx).
 				WithError(errors.WithStack(err)).
-				Error("main loop run failed")
+				Errorf("main loop run failed %d times in a row", l.failureCount)
+			l.failureCount++
 
 			// Sleep shortly because we do not want to DoS our logging system.
 			time.Sleep(100 * time.Millisecond)
+		} else {
+			l.failureCount = 0
 		}
 
 		<-l.signaler.C(ctx, time.Minute)

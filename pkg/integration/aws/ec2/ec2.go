@@ -41,6 +41,7 @@ type Client interface {
 	List() []Instance
 	Run(context.Context) error
 	SignalEmitter() *syncutil.SignalEmitter
+	Healthy() bool
 }
 
 type store struct {
@@ -48,6 +49,8 @@ type store struct {
 	refresh time.Duration
 	cache   map[string]Instance
 	emitter *syncutil.SignalEmitter
+
+	failureCount int
 }
 
 func New(sess *session.Session, refresh time.Duration) Client {
@@ -56,6 +59,10 @@ func New(sess *session.Session, refresh time.Duration) Client {
 		refresh: refresh,
 		emitter: new(syncutil.SignalEmitter),
 	}
+}
+
+func (s *store) Healthy() bool {
+	return s.failureCount == 0
 }
 
 func (s *store) SignalEmitter() *syncutil.SignalEmitter {
@@ -88,7 +95,12 @@ func (s *store) Run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		err := s.runOnce(ctx)
 		if err != nil {
-			return errors.WithStack(err)
+			logutil.Get(ctx).
+				WithError(errors.WithStack(err)).
+				Errorf("main loop run failed %d times in a row", s.failureCount)
+			s.failureCount++
+		} else {
+			s.failureCount = 0
 		}
 
 		time.Sleep(s.refresh)

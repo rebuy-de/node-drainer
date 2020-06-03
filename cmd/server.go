@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"sort"
 	"text/template"
 	"time"
 
@@ -17,15 +19,57 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 )
 
+type Healthier interface {
+	Healthy() bool
+}
+
+type HealthHandler struct {
+	services map[string]Healthier
+}
+
+func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	unhealthy := []string{}
+	for name, service := range h.services {
+		if !service.Healthy() {
+			unhealthy = append(unhealthy, name)
+		}
+	}
+
+	sort.Strings(unhealthy)
+
+	if len(unhealthy) == 0 {
+		fmt.Fprintln(w, "HEALTHY")
+		return
+	}
+
+	w.WriteHeader(http.StatusServiceUnavailable)
+	fmt.Fprintln(w, "UNHEALTHY:")
+	for _, name := range unhealthy {
+		fmt.Fprintf(w, "- %s ERRORED\n", name)
+	}
+
+}
+
 type Server struct {
 	asg asg.Client
 	ec2 ec2.Client
+
+	mainloop *MainLoop
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	h := HealthHandler{
+		services: map[string]Healthier{
+			"ec2":      s.ec2,
+			"asg":      s.asg,
+			"mainloop": s.mainloop,
+		},
+	}
+
 	router := httprouter.New()
 	router.GET("/", s.handleStatus)
 	router.GET("/-/ready", webutil.HandleHealth)
+	router.Handler("GET", "/-/healthy", h)
 	router.Handler("GET", "/metrics", promhttp.Handler())
 
 	return webutil.ListenAndServerWithContext(

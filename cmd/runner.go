@@ -43,12 +43,13 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 
 	ec2Client := ec2.New(sess, 1*time.Second)
 
-	server := &Server{
-		ec2: ec2Client,
-		asg: asgClient,
-	}
-
 	mainLoop := NewMainLoop(asgClient, ec2Client)
+
+	server := &Server{
+		ec2:      ec2Client,
+		asg:      asgClient,
+		mainloop: mainLoop,
+	}
 
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {

@@ -37,26 +37,32 @@ func (i Instance) Changed(old Instance) bool {
 	return i.State != old.State
 }
 
-type Store struct {
+type Client interface {
+	List() []Instance
+	Run(context.Context) error
+	SignalEmitter() *syncutil.SignalEmitter
+}
+
+type store struct {
 	api     *ec2.EC2
 	refresh time.Duration
 	cache   map[string]Instance
 	emitter *syncutil.SignalEmitter
 }
 
-func New(sess *session.Session, refresh time.Duration) *Store {
-	return &Store{
+func New(sess *session.Session, refresh time.Duration) Client {
+	return &store{
 		api:     ec2.New(sess),
 		refresh: refresh,
 		emitter: new(syncutil.SignalEmitter),
 	}
 }
 
-func (s *Store) SignalEmitter() *syncutil.SignalEmitter {
+func (s *store) SignalEmitter() *syncutil.SignalEmitter {
 	return s.emitter
 }
 
-func (s *Store) List() []Instance {
+func (s *store) List() []Instance {
 	result := []Instance{}
 
 	for _, instance := range s.cache {
@@ -78,7 +84,7 @@ func (s *Store) List() []Instance {
 	return result
 }
 
-func (s *Store) Run(ctx context.Context) error {
+func (s *store) Run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		err := s.runOnce(ctx)
 		if err != nil {
@@ -91,7 +97,7 @@ func (s *Store) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) runOnce(ctx context.Context) error {
+func (s *store) runOnce(ctx context.Context) error {
 	ctx = logutil.Start(ctx, "update")
 
 	instances, err := s.fetchInstances(ctx)
@@ -144,7 +150,7 @@ func (s *Store) runOnce(ctx context.Context) error {
 	return nil
 }
 
-func (s *Store) fetchInstances(ctx context.Context) (map[string]Instance, error) {
+func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error) {
 	params := &ec2.DescribeInstancesInput{}
 	instances := map[string]Instance{}
 

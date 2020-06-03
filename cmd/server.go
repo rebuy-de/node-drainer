@@ -18,8 +18,8 @@ import (
 )
 
 type Server struct {
-	asgHandler asg.Handler
-	ec2Store   *ec2.Store
+	asg asg.Client
+	ec2 ec2.Client
 }
 
 func (s *Server) Run(ctx context.Context) error {
@@ -40,8 +40,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 		Combined aws.Instances
 	}{}
 
-	data.ASGInstances = s.asgHandler.List()
-	data.EC2Instances = s.ec2Store.List()
+	data.ASGInstances = s.asg.List()
+	data.EC2Instances = s.ec2.List()
 	data.Combined = aws.CombineInstances(
 		data.ASGInstances, data.EC2Instances,
 	).Select(aws.HasLifecycleMessage).

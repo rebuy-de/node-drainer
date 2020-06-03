@@ -17,22 +17,22 @@ type MainLoop struct {
 	triggerLoop *syncutil.SignalEmitter
 	signaler    syncutil.Signaler
 
-	asg asg.Handler
-	ec2 *ec2.Store
+	asg asg.Client
+	ec2 ec2.Client
 }
 
-func NewMainLoop(asgStore asg.Handler, ec2Store *ec2.Store) *MainLoop {
+func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client) *MainLoop {
 	ml := new(MainLoop)
 
 	ml.stateCache = map[string]string{}
-	ml.asg = asgStore
-	ml.ec2 = ec2Store
+	ml.asg = asgClient
+	ml.ec2 = ec2Client
 	ml.triggerLoop = new(syncutil.SignalEmitter)
 
 	ml.signaler = syncutil.SignalerFromEmitters(
 		ml.triggerLoop,
-		asgStore.SignalEmitter(),
-		ec2Store.SignalEmitter(),
+		asgClient.SignalEmitter(),
+		ec2Client.SignalEmitter(),
 	)
 
 	return ml

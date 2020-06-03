@@ -38,24 +38,24 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	})
 	cmdutil.Must(err)
 
-	handler, err := asg.NewHandler(sess, r.sqsQueue)
+	asgClient, err := asg.New(sess, r.sqsQueue)
 	cmdutil.Must(err)
 
-	ec2Store := ec2.New(sess, 1*time.Second)
+	ec2Client := ec2.New(sess, 1*time.Second)
 
 	server := &Server{
-		ec2Store:   ec2Store,
-		asgHandler: handler,
+		ec2: ec2Client,
+		asg: asgClient,
 	}
 
-	mainLoop := NewMainLoop(handler, ec2Store)
+	mainLoop := NewMainLoop(asgClient, ec2Client)
 
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
-		return errors.Wrap(ec2Store.Run(ctx), "failed to run ec2 watcher")
+		return errors.Wrap(ec2Client.Run(ctx), "failed to run ec2 watcher")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(handler.Run(ctx), "failed to run handler")
+		return errors.Wrap(asgClient.Run(ctx), "failed to run handler")
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(server.Run(ctx), "failed to run server")
@@ -66,6 +66,7 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	cmdutil.Must(egrp.Wait())
 }
 
+// Canidate for SDK
 func logFieldsFromStruct(s interface{}) logrus.Fields {
 	fields := logrus.Fields{}
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{

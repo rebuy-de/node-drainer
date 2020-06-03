@@ -35,7 +35,7 @@ func TestAll(t *testing.T) {
 
 	helper.section("Start SQS Message Handler")
 	helper.waitForQueue(sqsQueueName)
-	handler, err := asg.NewHandler(helper.sess, sqsQueueName)
+	handler, err := asg.New(helper.sess, sqsQueueName)
 	helper.must(err)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -175,11 +175,11 @@ func (h *testHelper) teminateASGInstance(id *string) {
 	h.must(err)
 }
 
-func (h *testHelper) waitForInstances(handler asg.Handler, timeout time.Duration, want int) []asg.Instance {
+func (h *testHelper) waitForInstances(client asg.Client, timeout time.Duration, want int) []asg.Instance {
 	start := time.Now()
 	instances := []asg.Instance{}
 	for time.Since(start) < timeout {
-		instances = handler.List()
+		instances = client.List()
 		if len(instances) == want {
 			break
 		}

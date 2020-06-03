@@ -25,7 +25,7 @@ import (
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
-type Handler interface {
+type Client interface {
 	// Run executes the SQS message listener. Will update the instance cache
 	// based on SQS Messages. It will poll all messages from the ASG Lifecycle
 	// Hook and will keep them inflight until the instance actually disapeared.
@@ -92,7 +92,7 @@ type handler struct {
 // NewHandler creates a new Handler for ASG Lifecycle Hooks that are delivered
 // via SQS. It needs to be started with Run so it actually reads messages. See
 // Handler interface for more information.
-func NewHandler(sess *session.Session, queueName string) (Handler, error) {
+func New(sess *session.Session, queueName string) (Client, error) {
 	sqsClient := sqs.New(sess)
 	out, err := sqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{
 		QueueName: &queueName,

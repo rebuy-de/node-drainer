@@ -32,6 +32,8 @@ func (r *Runner) Bind(cmd *cobra.Command) error {
 }
 
 func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
+	ctx = InitIntrumentation(ctx)
+
 	sess, err := session.NewSessionWithOptions(session.Options{
 		SharedConfigState: session.SharedConfigEnable,
 		Profile:           r.awsProfile,

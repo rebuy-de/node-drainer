@@ -49,3 +49,15 @@ func HasASGData(i *Instance) bool {
 func HasLifecycleMessage(i *Instance) bool {
 	return HasASGData(i) && i.ASG.Deleted == false
 }
+
+func HasEC2State(states ...string) Selector {
+	return func(i *Instance) bool {
+		for _, state := range states {
+			if i.EC2.State == state {
+				return true
+			}
+		}
+
+		return false
+	}
+}

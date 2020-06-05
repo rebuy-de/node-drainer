@@ -91,11 +91,11 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		l.ec2.List(),
 	).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
 
+	InstMainLoopStarted(ctx, combined)
+
 	// Mark all instances as complete immediately.
 	for _, instance := range combined.Select(aws.IsWaiting) {
-		logutil.Get(ctx).
-			WithFields(logFieldsFromStruct(instance)).
-			Info("marking node as complete")
+		InstMainLoopCompletingInstance(ctx, instance)
 
 		err := l.asg.Complete(ctx, instance.InstanceID)
 		if err != nil {
@@ -123,30 +123,16 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 			continue
 		}
 
-		logger := logutil.Get(ctx).
-			WithFields(logFieldsFromStruct(instance))
-
-		logger.Infof("instance state changed from '%s' to '%s'", prevState, currState)
-
-		if currState == ec2.InstanceStateTerminated {
-			logger.Infof(
-				"instance drainage took %v",
-				instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt),
-			)
-		}
-
-		// Safe action that does not need a loop-restart.
-		l.triggerLoop.Emit()
+		InstMainLoopInstanceStateChanged(ctx, instance, prevState, currState)
 	}
 
 	// Clean up old messages
 	for _, instance := range combined.Filter(aws.HasEC2Data).Select(aws.HasLifecycleMessage) {
-		logger := logutil.Get(ctx).
-			WithFields(logFieldsFromStruct(instance))
+		InstMainLoopDeletingLifecycleMessage(ctx, instance)
+
 		age := time.Since(instance.ASG.TriggeredAt)
 		if age < 30*time.Minute {
-			logger.Warnf("termination time of %s was triggered just %v ago, assuming that the cache was empty",
-				instance.InstanceID, age)
+			InstMainLoopDeletingLifecycleMessageAgeSanityCheckFailed(ctx, instance, age)
 			l.triggerLoop.Emit() // we need to retry
 			continue
 		}
@@ -155,8 +141,6 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to delete message")
 		}
-
-		logger.Info("deleted lifecycle message from SQS")
 
 		// Safe action that does not need a loop-restart.
 		l.triggerLoop.Emit()

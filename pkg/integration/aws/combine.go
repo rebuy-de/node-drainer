@@ -5,6 +5,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 )
 
+// CombineInstances merges EC2 instance date from different sources.
 func CombineInstances(ai []asg.Instance, ei []ec2.Instance) Instances {
 	instances := map[string]Instance{}
 

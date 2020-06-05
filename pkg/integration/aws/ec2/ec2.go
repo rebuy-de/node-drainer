@@ -1,3 +1,5 @@
+// Package ec2 provides an interface to EC2 instances, that are polled from the
+// API. It manages a local cache, which is updated periodically.
 package ec2
 
 import (
@@ -20,6 +22,7 @@ const (
 	InstanceStateShuttingDown = "shutting-down"
 )
 
+// Instance is the instance-related data that is retrieved via API.
 type Instance struct {
 	InstanceID           string     `logfield:"instance-id"`
 	InstanceName         string     `logfield:"instance-name"`
@@ -33,14 +36,26 @@ type Instance struct {
 	TerminationTime      *time.Time `logfield:"termination-time,omitempty"`
 }
 
+// Changed returns true, if relevant fields of the instance changed.
 func (i Instance) Changed(old Instance) bool {
 	return i.State != old.State
 }
 
+// Client is an interface to EC2 data.
 type Client interface {
-	List() []Instance
+	// Run executes the EC2 API poller. It will update the instance cache
+	// periodically.
 	Run(context.Context) error
+
+	// List returns all EC2 Instances that are currently in the cache. Those
+	// instance cache will be updated in the background.
+	List() []Instance
+
+	// SignalEmitter gets triggered every time the cache changes. See syncutil
+	// package for more information.
 	SignalEmitter() *syncutil.SignalEmitter
+
+	// Healthy indicates whether the background job is running correctly.
 	Healthy() bool
 }
 
@@ -53,6 +68,8 @@ type store struct {
 	failureCount int
 }
 
+// New creates a new client for the EC2 API. It needs to be started with Run so
+// it actually reads messages. See Client interface for more information.
 func New(sess *session.Session, refresh time.Duration) Client {
 	return &store{
 		api:     ec2.New(sess),

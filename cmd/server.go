@@ -19,14 +19,19 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 )
 
+// Healthier is a simple interface, that can easily be implemented by all
+// critical services. It is used to indicate their health statuses.
 type Healthier interface {
 	Healthy() bool
 }
 
+// HealthHandler is a http.Handler that is used for the lifeness probe.
 type HealthHandler struct {
 	services map[string]Healthier
 }
 
+// ServeHTTP reponds 200, when all services are healhy. Otherwise it responds
+// with 503.
 func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	unhealthy := []string{}
 	for name, service := range h.services {
@@ -50,6 +55,8 @@ func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// Server is the HTTP server, which is used for the status page, metrics and
+// healthyness.
 type Server struct {
 	asg asg.Client
 	ec2 ec2.Client
@@ -57,6 +64,7 @@ type Server struct {
 	mainloop *MainLoop
 }
 
+// Run starts the actual HTTP server.
 func (s *Server) Run(ctx context.Context) error {
 	h := HealthHandler{
 		services: map[string]Healthier{

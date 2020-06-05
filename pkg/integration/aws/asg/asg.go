@@ -1,8 +1,7 @@
-// Package asg provides a handler for a ASG Lifecycle Hook, that is delivered
-// via SQS. The handler manages a local cache, which is filled from SQS
-// messages. The instance lifecycle can be completed, so the ASG can continue
-// to terminate an instance. If an instance gets terminated, it will be removed
-// from the cache.
+// Package asg provides an interface to ASG Lifecycle Hooks, that are delivered
+// via SQS. It manages a local cache, which is filled from SQS messages. The
+// instance lifecycle can be completed, so the ASG can continue to terminate an
+// instance.
 package asg
 
 import (
@@ -25,8 +24,9 @@ import (
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
+// Client is an interface to ASG Lifecycle Hooks.
 type Client interface {
-	// Run executes the SQS message listener. Will update the instance cache
+	// Run executes the SQS message listener. It will update the instance cache
 	// based on SQS Messages. It will poll all messages from the ASG Lifecycle
 	// Hook and will keep them inflight until the instance actually disapeared.
 	Run(ctx context.Context) error
@@ -41,11 +41,15 @@ type Client interface {
 	// Delete deletes the message from SQS.
 	Delete(ctx context.Context, id string) error
 
+	// SignalEmitter gets triggered every time the cache changes. See syncutil
+	// package for more information.
 	SignalEmitter() *syncutil.SignalEmitter
 
+	// Healthy indicates whether the background job is running correctly.
 	Healthy() bool
 }
 
+// Instance is the instance-related data that is retrieved via SQS.
 type Instance struct {
 	// ID is the EC2 Instance ID
 	ID string `logfield:"instance-id"`
@@ -53,11 +57,10 @@ type Instance struct {
 	// TriggeredAt is the thime then the shutdown was triggered.
 	TriggeredAt time.Time `logfield:"triggered-at"`
 
-	// CompletedAt is the time when Complete() was called.
+	// Completed indicates that Complete() was called.
 	Completed bool `logfield:"completed"`
 
-	// DeletedAt is the time when Delete() was called. Deleted instaces get
-	// deleted after one hour.
+	// Deleted indicates that Delete() was called.
 	Deleted bool `logfield:"deleted"`
 }
 
@@ -69,6 +72,7 @@ type cacheValue struct {
 	deletedAt     time.Time
 }
 
+// messageBody is used for decoding JSON from the SQS messages.
 type messageBody struct {
 	LifecycleHookName    string
 	AccountId            string
@@ -93,9 +97,9 @@ type handler struct {
 	failureCount int
 }
 
-// NewHandler creates a new Handler for ASG Lifecycle Hooks that are delivered
-// via SQS. It needs to be started with Run so it actually reads messages. See
-// Handler interface for more information.
+// New creates a new client for ASG Lifecycle Hooks that are delivered via SQS.
+// It needs to be started with Run so it actually reads messages. See Client
+// interface for more information.
 func New(sess *session.Session, queueName string) (Client, error) {
 	sqsClient := sqs.New(sess)
 	out, err := sqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{

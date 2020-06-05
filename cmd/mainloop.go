@@ -12,6 +12,9 @@ import (
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
+// MainLoop does the actual node-drainer actions. When any client cache
+// changes, it starts a new update loop and checks whether an action is
+// required.
 type MainLoop struct {
 	stateCache  map[string]string
 	triggerLoop *syncutil.SignalEmitter
@@ -23,6 +26,7 @@ type MainLoop struct {
 	ec2 ec2.Client
 }
 
+// NewMainLoop initializes a MainLoop.
 func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client) *MainLoop {
 	ml := new(MainLoop)
 
@@ -40,10 +44,12 @@ func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client) *MainLoop {
 	return ml
 }
 
+// Healthy indicates whether the background job is running correctly.
 func (l *MainLoop) Healthy() bool {
 	return l.failureCount == 0
 }
 
+// Run starts the mainloop.
 func (l *MainLoop) Run(ctx context.Context) error {
 	ctx = logutil.Start(ctx, "mainloop")
 

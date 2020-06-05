@@ -5,13 +5,15 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 )
 
 type Runner struct {
@@ -36,54 +38,50 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	})
 	cmdutil.Must(err)
 
-	handler, err := asg.NewHandler(sess, r.sqsQueue)
+	asgClient, err := asg.New(sess, r.sqsQueue)
 	cmdutil.Must(err)
+
+	ec2Client := ec2.New(sess, 1*time.Second)
+
+	mainLoop := NewMainLoop(asgClient, ec2Client)
+
+	server := &Server{
+		ec2:      ec2Client,
+		asg:      asgClient,
+		mainloop: mainLoop,
+	}
 
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
-		return errors.Wrap(handler.Run(ctx), "failed to run handler")
+		return errors.Wrap(ec2Client.Run(ctx), "failed to run ec2 watcher")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(r.runMainLoop(ctx, handler), "failed to run main loop")
+		return errors.Wrap(asgClient.Run(ctx), "failed to run handler")
+	})
+	egrp.Go(func() error {
+		return errors.Wrap(server.Run(ctx), "failed to run server")
+	})
+	egrp.Go(func() error {
+		return errors.Wrap(mainLoop.Run(ctx), "failed to run main loop")
 	})
 	cmdutil.Must(egrp.Wait())
 }
 
-func (r *Runner) runMainLoop(ctx context.Context, handler asg.Handler) error {
-	l := logrus.WithField("subsystem", "mainloop")
-
-	signaler := handler.NewSignaler()
-
-	for ctx.Err() == nil {
-		<-signaler.C(ctx, time.Minute)
-
-		instances := handler.List()
-		if len(instances) == 0 {
-			l.Debug("no instances waiting for shutdown")
-			continue
-		}
-
-		l.Infof("%d instances are waiting for shutdown", len(instances))
-		for _, instance := range instances {
-			l := l.WithFields(logrus.Fields{
-				"node_name":   instance.Name,
-				"instance_id": instance.ID,
-				"since":       instance.Since,
-			})
-			l.Debugf("%s is waiting for shutdown", instance.Name)
-		}
-
-		instance := instances[0]
-		l.WithFields(logrus.Fields{
-			"node_name":   instance.Name,
-			"instance_id": instance.ID,
-			"since":       instance.Since,
-		}).Info("marking node as complete")
-		err := handler.Complete(instance.ID)
-		if err != nil {
-			return errors.Wrap(err, "failed to mark node as complete")
-		}
+// Canidate for SDK
+func logFieldsFromStruct(s interface{}) logrus.Fields {
+	fields := logrus.Fields{}
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName: "logfield",
+		Result:  &fields,
+	})
+	if err != nil {
+		return logrus.Fields{"logfield-error": err}
 	}
 
-	return nil
+	err = dec.Decode(s)
+	if err != nil {
+		return logrus.Fields{"logfield-error": err}
+	}
+
+	return fields
 }

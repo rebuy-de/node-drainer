@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <title>NodeDrainer</title>
+
+    <style>
+        table.table-wide td, table.table-wide th {
+            white-space:nowrap;
+        }
+    </style>
+  </head>
+  <body class="mb-5">
+    <nav class="navbar navbar-expand navbar-dark bg-dark mb-4">
+      <a class="navbar-brand" href="">NodeDrainer</a>
+    </nav>
+
+    <div class="container">
+        <h1>Status Page</h1>
+
+        <h3>Combined</h3>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Host Name</th>
+              <th>Instance Name</th>
+              <th>State</th>
+              <th>Launch Time</th>
+              <th>Triggered At</th>
+              <th>Termination Time</th>
+            </tr>
+          </thead>
+          <tbody>
+              {{ range .Combined }}
+              <tr>
+                <td>{{ .InstanceID }}</td>
+                <td>{{ .EC2.HostName }}</td>
+                <td>{{ .EC2.InstanceName }}</td>
+                <td>
+                    {{ if eq .EC2.State "running" }}
+                        <span class="badge badge-success">Running</span>
+                    {{ else if eq .EC2.State "terminated" }}
+                        <span class="badge badge-danger">Terminated</span>
+                    {{ else if eq .EC2.State "shutting-down" }}
+                        <span class="badge badge-warning">Shutting Down</span>
+                    {{ else if eq .EC2.State "pending" }}
+                        <span class="badge badge-info">Pending</span>
+                    {{ else }}
+                        <code>{{ .EC2.State }}</code>
+                    {{ end }}
+                </td>
+                <td>{{ PrettyTime .EC2.LaunchTime }}</td>
+                <td>{{ PrettyTime .ASG.TriggeredAt }}</td>
+                <td>{{ PrettyTime .EC2.TerminationTime }}</td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
+        <h3>ASG Lifecycle</h3>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Triggered</th>
+              <th>Completed</th>
+              <th>Deleted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .ASGInstances }}
+              <tr>
+                <td>{{ .ID }}</td>
+                <td>{{ PrettyTime .TriggeredAt }}</td>
+                <td>
+                    {{ if .Completed }}
+                        <span class="badge badge-success">yes</span>
+                    {{ else }}
+                        <span class="badge badge-info">no</span>
+                    {{ end }}
+                </td>
+                <td>
+                    {{ if .Deleted }}
+                        <span class="badge badge-success">yes</span>
+                    {{ else }}
+                        <span class="badge badge-info">no</span>
+                    {{ end }}
+                </td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
+        <h3>EC2</h3>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Host Name</th>
+              <th>Instance Name</th>
+              <th>Type</th>
+              <th>AZ</th>
+              <th>Lifecycle</th>
+              <th>State</th>
+              <th>Launch Time</th>
+              <th>Termination Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .EC2Instances }}
+              <tr>
+                <td>{{ .InstanceID }}</td>
+                <td>{{ .HostName }}</td>
+                <td>{{ .InstanceName }}</td>
+                <td>{{ .InstanceType }}</td>
+                <td>{{ .AvailabilityZone }}</td>
+                <td>{{ .InstanceLifecycle }}</td>
+                <td>
+                    {{ if eq .State "running" }}
+                        <span class="badge badge-success">Running</span>
+                    {{ else if eq .State "terminated" }}
+                        <span class="badge badge-danger">Terminated</span>
+                    {{ else if eq .State "shutting-down" }}
+                        <span class="badge badge-warning">Shutting Down</span>
+                    {{ else if eq .State "pending" }}
+                        <span class="badge badge-info">Pending</span>
+                    {{ else }}
+                        <code>{{ .State }}</code>
+                    {{ end }}
+                </td>
+                <td>{{ PrettyTime .LaunchTime }}</td>
+                <td>{{ PrettyTime .TerminationTime }}</td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
+    </div>
+  </body>
+</html>

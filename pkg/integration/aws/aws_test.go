@@ -1,4 +1,4 @@
-package asg_test
+package aws_test
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/sirupsen/logrus"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/asg/tftest"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/tftest"
 )
 
 func TestAll(t *testing.T) {
@@ -35,7 +35,7 @@ func TestAll(t *testing.T) {
 
 	helper.section("Start SQS Message Handler")
 	helper.waitForQueue(sqsQueueName)
-	handler, err := asg.NewHandler(helper.sess, sqsQueueName)
+	handler, err := asg.New(helper.sess, sqsQueueName)
 	helper.must(err)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -68,7 +68,7 @@ func TestAll(t *testing.T) {
 	}
 
 	helper.section("Complete First Instance and Wait for it to Disappear")
-	helper.must(handler.Complete(instances[0].ID))
+	helper.must(handler.Complete(ctx, instances[0].ID))
 	instances = helper.waitForInstances(handler, 30*time.Second, 1)
 
 	helper.section("Check instance ID")
@@ -78,7 +78,7 @@ func TestAll(t *testing.T) {
 	}
 
 	helper.section("Complete second instance and Wait for it to Disappear")
-	helper.must(handler.Complete(instances[0].ID))
+	helper.must(handler.Complete(ctx, instances[0].ID))
 	instances = helper.waitForInstances(handler, 30*time.Second, 0)
 }
 
@@ -175,11 +175,11 @@ func (h *testHelper) teminateASGInstance(id *string) {
 	h.must(err)
 }
 
-func (h *testHelper) waitForInstances(handler asg.Handler, timeout time.Duration, want int) []asg.Instance {
+func (h *testHelper) waitForInstances(client asg.Client, timeout time.Duration, want int) []asg.Instance {
 	start := time.Now()
 	instances := []asg.Instance{}
 	for time.Since(start) < timeout {
-		instances = handler.List()
+		instances = client.List()
 		if len(instances) == want {
 			break
 		}

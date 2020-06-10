@@ -1,6 +1,6 @@
-// Package ec2 provides an interface to EC2 instances, that are polled from the
+// Package spot provides an interface to Spot requests, that are polled from the
 // API. It manages a local cache, which is updated periodically.
-package ec2
+package spot
 
 import (
 	"context"
@@ -17,6 +17,14 @@ import (
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
+// See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-bid-status.html
+const (
+	StateActive    = "active"
+	StateCancelled = "cancelled"
+	StateFailed    = "failed"
+	StateClosed    = "closed"
+)
+
 const (
 	InstanceStateRunning      = "running"
 	InstanceStateTerminated   = "terminated"
@@ -25,29 +33,27 @@ const (
 
 // Instance is the instance-related data that is retrieved via API.
 type Instance struct {
-	InstanceID        string     `logfield:"instance-id"`
-	InstanceName      string     `logfield:"instance-name"`
-	HostName          string     `logfield:"node-name"`
-	InstanceType      string     `logfield:"instance-type"`
-	AvailabilityZone  string     `logfield:"availability-zone"`
-	InstanceLifecycle string     `logfield:"ec2-instance-lifecycle"`
-	State             string     `logfield:"ec2-instance-state"`
-	LaunchTime        time.Time  `logfield:"ec2-launch-time"`
-	TerminationTime   *time.Time `logfield:"ec2-termination-time,omitempty"`
+	InstanceID       string    `logfield:"instance-id"`
+	RequestID        string    `logfield:"spot-request-id"`
+	CreateTime       time.Time `logfield:"spot-create-time"`
+	State            string    `logfield:"spot-state"`
+	StatusCode       string    `logfield:"spot-status-code"`
+	StatusUpdateTime time.Time `logfield:"spot-status-update-time"`
 }
 
 // Changed returns true, if relevant fields of the instance changed.
 func (i Instance) Changed(old Instance) bool {
-	return i.State != old.State
+	return i.State != old.State ||
+		i.StatusCode != old.StatusCode
 }
 
-// Client is an interface to EC2 data.
+// Client is an interface to Spot request data.
 type Client interface {
 	// Run executes the EC2 API poller. It will update the instance cache
 	// periodically.
 	Run(context.Context) error
 
-	// List returns all EC2 Instances that are currently in the cache. Those
+	// List returns all Spot requests that are currently in the cache. Those
 	// instance cache will be updated in the background.
 	List() []Instance
 
@@ -102,7 +108,7 @@ func (s *store) List() []Instance {
 	})
 
 	sort.SliceStable(result, func(i, j int) bool {
-		return result[i].LaunchTime.Before(result[j].LaunchTime)
+		return result[i].CreateTime.Before(result[j].CreateTime)
 	})
 
 	return result
@@ -142,7 +148,7 @@ func (s *store) runOnce(ctx context.Context) error {
 		if !ok {
 			logutil.Get(ctx).
 				WithFields(logutilbeta.FromStruct(instance)).
-				Debugf("add new instance to cache")
+				Debugf("add new spot instance to cache")
 			changed = true
 			continue
 		}
@@ -150,7 +156,7 @@ func (s *store) runOnce(ctx context.Context) error {
 		if instance.Changed(old) {
 			logutil.Get(ctx).
 				WithFields(logutilbeta.FromStruct(instance)).
-				Debugf("cached instance changed")
+				Debugf("cached spot instance changed")
 			changed = true
 			continue
 		}
@@ -162,7 +168,7 @@ func (s *store) runOnce(ctx context.Context) error {
 		if !ok {
 			logutil.Get(ctx).
 				WithFields(logutilbeta.FromStruct(instance)).
-				Debugf("cached instance was removed")
+				Debugf("cached spot instance was removed")
 			changed = true
 			continue
 		}
@@ -180,65 +186,46 @@ func (s *store) runOnce(ctx context.Context) error {
 }
 
 func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error) {
-	params := &ec2.DescribeInstancesInput{}
+	params := &ec2.DescribeSpotInstanceRequestsInput{}
 	instances := map[string]Instance{}
 
 	for {
-		resp, err := s.api.DescribeInstances(params)
+		resp, err := s.api.DescribeSpotInstanceRequests(params)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 
-		for _, reservation := range resp.Reservations {
-			for _, dto := range reservation.Instances {
-				id := aws.StringValue(dto.InstanceId)
+		for _, dto := range resp.SpotInstanceRequests {
+			id := aws.StringValue(dto.InstanceId)
 
-				if id == "" {
-					// No idea how this could happend. If it happens anyways,
-					// we at least skip the item and log it, so the alerting
-					// gets triggered if it happens more often.
-					logutil.Get(ctx).WithField("instance-dto", dto).Error("got instance with empty instance ID")
-					continue
-				}
-
-				instance := Instance{
-					InstanceID:        id,
-					HostName:          aws.StringValue(dto.PrivateDnsName),
-					State:             aws.StringValue(dto.State.Name),
-					InstanceType:      aws.StringValue(dto.InstanceType),
-					InstanceName:      ec2tag(dto, "Name"),
-					AvailabilityZone:  aws.StringValue(dto.Placement.AvailabilityZone),
-					InstanceLifecycle: aws.StringValue(dto.InstanceLifecycle),
-					LaunchTime:        aws.TimeValue(dto.LaunchTime),
-				}
-
-				if instance.State == InstanceStateTerminated || instance.State == InstanceStateShuttingDown {
-					// Parsing the termination date from the
-					// StateTransitionReason is not very reliable, since it is
-					// not standarized and we do tolarate other reasons. This
-					// is fine, since we use it only for displaying purposes.
-					// If we need a reliable value, we would need to get it
-					// from CloudTrail.
-					terminationTime, err := time.Parse("User initiated (2006-01-02 15:04:05 MST)", aws.StringValue(dto.StateTransitionReason))
-					if err != nil {
-						logutil.Get(ctx).
-							WithField("state-transition-reason", dto.StateTransitionReason).
-							WithError(errors.WithStack(err)).
-							Warn("failed to parse state transition reason")
-					} else {
-						instance.TerminationTime = &terminationTime
-					}
-				}
-
-				instances[id] = instance
+			if id == "" {
+				// No idea how this could happend. If it happens anyways,
+				// we at least skip the item and log it, so the alerting
+				// gets triggered if it happens more often.
+				logutil.Get(ctx).WithField("spot-instance-dto", dto).Error("got instance with empty spot instance ID")
+				continue
 			}
+
+			instance := Instance{
+				InstanceID: id,
+				RequestID:  aws.StringValue(dto.SpotInstanceRequestId),
+				CreateTime: aws.TimeValue(dto.CreateTime),
+				State:      aws.StringValue(dto.State),
+			}
+
+			if dto.Status != nil {
+				instance.StatusCode = aws.StringValue(dto.Status.Code)
+				instance.StatusUpdateTime = aws.TimeValue(dto.Status.UpdateTime)
+			}
+
+			instances[id] = instance
 		}
 
 		if resp.NextToken == nil {
 			break
 		}
 
-		params = &ec2.DescribeInstancesInput{
+		params = &ec2.DescribeSpotInstanceRequestsInput{
 			NextToken: resp.NextToken,
 		}
 	}

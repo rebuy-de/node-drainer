@@ -64,6 +64,42 @@
           </tbody>
         </table>
 
+        <h3>Spot Requests</h3>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Request ID</th>
+              <th>Create Time</th>
+              <th>State</th>
+              <th>Status Code</th>
+              <th>Status Update Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .SpotInstances }}
+              <tr>
+                <td>{{ .InstanceID }}</td>
+                <td>{{ .RequestID }}</td>
+                <td>{{ PrettyTime .CreateTime }}</td>
+                <td>
+                    {{ if eq .State "active" }}
+                        <span class="badge badge-success">Active</span>
+                    {{ else if eq .State "closed" }}
+                        <span class="badge badge-danger">Closed</span>
+                    {{ else }}
+                        <code>{{ .State }}</code>
+                    {{ end }}
+                </td>
+                <td><code>{{ .StatusCode }}</code></td>
+                <td>{{ PrettyTime .StatusUpdateTime }}</td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
+
         <h3>ASG Lifecycle</h3>
 
         <table class="table table-hover table-sm table-wide">

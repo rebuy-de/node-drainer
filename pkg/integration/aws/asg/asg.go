@@ -55,13 +55,13 @@ type Instance struct {
 	ID string `logfield:"instance-id"`
 
 	// TriggeredAt is the thime then the shutdown was triggered.
-	TriggeredAt time.Time `logfield:"triggered-at"`
+	TriggeredAt time.Time `logfield:"lifecycle-triggered-at"`
 
 	// Completed indicates that Complete() was called.
-	Completed bool `logfield:"completed"`
+	Completed bool `logfield:"lifecycle-completed"`
 
 	// Deleted indicates that Delete() was called.
-	Deleted bool `logfield:"deleted"`
+	Deleted bool `logfield:"lifecycle-deleted"`
 }
 
 type cacheValue struct {
@@ -210,10 +210,10 @@ func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
 	}
 
 	ctx = logutil.WithFields(ctx, logrus.Fields{
-		"asg_name":     cacheItem.Body.AutoScalingGroupName,
-		"message_time": cacheItem.Body.Time,
+		"asg-name":     cacheItem.Body.AutoScalingGroupName,
+		"message-time": cacheItem.Body.Time,
 		"transistion":  cacheItem.Body.LifecycleTransition,
-		"instance_id":  cacheItem.Body.EC2InstanceId,
+		"instance-id":  cacheItem.Body.EC2InstanceId,
 	})
 
 	if cacheItem.Body.Event == "autoscaling:TEST_NOTIFICATION" {

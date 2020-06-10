@@ -5,10 +5,8 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -67,23 +65,4 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 		return errors.Wrap(mainLoop.Run(ctx), "failed to run main loop")
 	})
 	cmdutil.Must(egrp.Wait())
-}
-
-// Canidate for SDK
-func logFieldsFromStruct(s interface{}) logrus.Fields {
-	fields := logrus.Fields{}
-	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		TagName: "logfield",
-		Result:  &fields,
-	})
-	if err != nil {
-		return logrus.Fields{"logfield-error": err}
-	}
-
-	err = dec.Decode(s)
-	if err != nil {
-		return logrus.Fields{"logfield-error": err}
-	}
-
-	return fields
 }

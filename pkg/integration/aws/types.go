@@ -5,14 +5,16 @@ import (
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
 )
 
 // Instance is the combined data from different sources.
 type Instance struct {
 	InstanceID string `logfield:"instance-id"`
 
-	ASG asg.Instance `logfield:",squash"`
-	EC2 ec2.Instance `logfield:",squash"`
+	ASG  asg.Instance  `logfield:",squash"`
+	EC2  ec2.Instance  `logfield:",squash"`
+	Spot spot.Instance `logfield:",squash"`
 }
 
 // Instances is a collection of Instance types with some additional functions.

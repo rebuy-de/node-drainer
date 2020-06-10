@@ -8,6 +8,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
@@ -22,23 +23,26 @@ type MainLoop struct {
 
 	failureCount int
 
-	asg asg.Client
-	ec2 ec2.Client
+	asg  asg.Client
+	ec2  ec2.Client
+	spot spot.Client
 }
 
 // NewMainLoop initializes a MainLoop.
-func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client) *MainLoop {
+func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client, spotClient spot.Client) *MainLoop {
 	ml := new(MainLoop)
 
 	ml.stateCache = map[string]string{}
 	ml.asg = asgClient
 	ml.ec2 = ec2Client
+	ml.spot = spotClient
 	ml.triggerLoop = new(syncutil.SignalEmitter)
 
 	ml.signaler = syncutil.SignalerFromEmitters(
 		ml.triggerLoop,
 		asgClient.SignalEmitter(),
 		ec2Client.SignalEmitter(),
+		spotClient.SignalEmitter(),
 	)
 
 	return ml
@@ -89,6 +93,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 	combined := aws.CombineInstances(
 		l.asg.List(),
 		l.ec2.List(),
+		l.spot.List(),
 	).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
 
 	InstMainLoopStarted(ctx, combined)

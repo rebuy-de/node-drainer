@@ -12,6 +12,7 @@ import (
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
 )
 
 type Runner struct {
@@ -42,24 +43,29 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	cmdutil.Must(err)
 
 	ec2Client := ec2.New(sess, 1*time.Second)
+	spotClient := spot.New(sess, 1*time.Second)
 
-	mainLoop := NewMainLoop(asgClient, ec2Client)
+	mainLoop := NewMainLoop(asgClient, ec2Client, spotClient)
 
 	server := &Server{
 		ec2:      ec2Client,
 		asg:      asgClient,
+		spot:     spotClient,
 		mainloop: mainLoop,
 	}
 
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
-		return errors.Wrap(ec2Client.Run(ctx), "failed to run ec2 watcher")
+		return errors.Wrap(ec2Client.Run(ctx), "failed to run ec2 watch client")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(asgClient.Run(ctx), "failed to run handler")
+		return errors.Wrap(spotClient.Run(ctx), "failed to run spot watch client")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(server.Run(ctx), "failed to run server")
+		return errors.Wrap(asgClient.Run(ctx), "failed to run ASG Lifecycle client")
+	})
+	egrp.Go(func() error {
+		return errors.Wrap(server.Run(ctx), "failed to run HTTP server")
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(mainLoop.Run(ctx), "failed to run main loop")

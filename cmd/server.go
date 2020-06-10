@@ -17,6 +17,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
 )
 
 // Healthier is a simple interface, that can easily be implemented by all
@@ -58,8 +59,9 @@ func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Server is the HTTP server, which is used for the status page, metrics and
 // healthyness.
 type Server struct {
-	asg asg.Client
-	ec2 ec2.Client
+	asg  asg.Client
+	ec2  ec2.Client
+	spot spot.Client
 
 	mainloop *MainLoop
 }
@@ -70,6 +72,7 @@ func (s *Server) Run(ctx context.Context) error {
 		services: map[string]Healthier{
 			"ec2":      s.ec2,
 			"asg":      s.asg,
+			"spot":     s.spot,
 			"mainloop": s.mainloop,
 		},
 	}
@@ -86,16 +89,19 @@ func (s *Server) Run(ctx context.Context) error {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	data := struct {
-		ASGInstances []asg.Instance
-		EC2Instances []ec2.Instance
+		ASGInstances  []asg.Instance
+		EC2Instances  []ec2.Instance
+		SpotInstances []spot.Instance
 
 		Combined aws.Instances
 	}{}
 
 	data.ASGInstances = s.asg.List()
 	data.EC2Instances = s.ec2.List()
+	data.SpotInstances = s.spot.List()
+
 	data.Combined = aws.CombineInstances(
-		data.ASGInstances, data.EC2Instances,
+		data.ASGInstances, data.EC2Instances, data.SpotInstances,
 	).Select(aws.HasLifecycleMessage).
 		Sort(aws.ByInstanceID).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
 

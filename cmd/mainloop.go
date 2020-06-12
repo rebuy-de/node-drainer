@@ -9,8 +9,8 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
-	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 )
 
 // MainLoop does the actual node-drainer actions. When any client cache

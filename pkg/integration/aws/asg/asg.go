@@ -20,8 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 )
 
 // Client is an interface to ASG Lifecycle Hooks.

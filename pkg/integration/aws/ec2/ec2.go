@@ -12,9 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/logutilbeta"
-	"github.com/rebuy-de/node-drainer/v2/pkg/syncutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 )
 
 const (
@@ -141,7 +140,7 @@ func (s *store) runOnce(ctx context.Context) error {
 		old, ok := s.cache[instance.InstanceID]
 		if !ok {
 			logutil.Get(ctx).
-				WithFields(logutilbeta.FromStruct(instance)).
+				WithFields(logutil.FromStruct(instance)).
 				Debugf("add new instance to cache")
 			changed = true
 			continue
@@ -149,7 +148,7 @@ func (s *store) runOnce(ctx context.Context) error {
 
 		if instance.Changed(old) {
 			logutil.Get(ctx).
-				WithFields(logutilbeta.FromStruct(instance)).
+				WithFields(logutil.FromStruct(instance)).
 				Debugf("cached instance changed")
 			changed = true
 			continue
@@ -161,7 +160,7 @@ func (s *store) runOnce(ctx context.Context) error {
 		_, ok := instances[instance.InstanceID]
 		if !ok {
 			logutil.Get(ctx).
-				WithFields(logutilbeta.FromStruct(instance)).
+				WithFields(logutil.FromStruct(instance)).
 				Debugf("cached instance was removed")
 			changed = true
 			continue

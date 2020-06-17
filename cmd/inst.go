@@ -8,7 +8,6 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/instutil"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
-	"github.com/rebuy-de/node-drainer/v2/pkg/logutilbeta"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
@@ -51,13 +50,13 @@ func InstMainLoopStarted(ctx context.Context, instances aws.Instances) {
 
 func InstMainLoopCompletingInstance(ctx context.Context, instance aws.Instance) {
 	logutil.Get(ctx).
-		WithFields(logutilbeta.FromStruct(instance)).
+		WithFields(logutil.FromStruct(instance)).
 		Info("marking node as complete")
 }
 
 func InstMainLoopInstanceStateChanged(ctx context.Context, instance aws.Instance, prevState, currState string) {
 	logger := logutil.Get(ctx).
-		WithFields(logutilbeta.FromStruct(instance))
+		WithFields(logutil.FromStruct(instance))
 
 	logger.Infof("instance state changed from '%s' to '%s'", prevState, currState)
 
@@ -74,13 +73,13 @@ func InstMainLoopInstanceStateChanged(ctx context.Context, instance aws.Instance
 
 func InstMainLoopDeletingLifecycleMessage(ctx context.Context, instance aws.Instance) {
 	logutil.Get(ctx).
-		WithFields(logutilbeta.FromStruct(instance)).
+		WithFields(logutil.FromStruct(instance)).
 		Info("deleting lifecycle message from SQS")
 }
 
 func InstMainLoopDeletingLifecycleMessageAgeSanityCheckFailed(ctx context.Context, instance aws.Instance, age time.Duration) {
 	logutil.Get(ctx).
-		WithFields(logutilbeta.FromStruct(instance)).
+		WithFields(logutil.FromStruct(instance)).
 		Warnf("termination time of %s was triggered just %v ago, assuming that the cache was empty",
 			instance.InstanceID, age)
 }

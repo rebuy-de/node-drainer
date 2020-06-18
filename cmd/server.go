@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"text/template"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/node"
 )
 
 // Healthier is a simple interface, that can easily be implemented by all
@@ -59,9 +61,10 @@ func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Server is the HTTP server, which is used for the status page, metrics and
 // healthyness.
 type Server struct {
-	asg  asg.Client
-	ec2  ec2.Client
-	spot spot.Client
+	asg   asg.Client
+	ec2   ec2.Client
+	spot  spot.Client
+	nodes node.Client
 
 	mainloop *MainLoop
 }
@@ -92,6 +95,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 		ASGInstances  []asg.Instance
 		EC2Instances  []ec2.Instance
 		SpotInstances []spot.Instance
+		Nodes         []node.Node
 
 		Combined aws.Instances
 	}{}
@@ -99,6 +103,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data.ASGInstances = s.asg.List()
 	data.EC2Instances = s.ec2.List()
 	data.SpotInstances = s.spot.List()
+	data.Nodes = s.nodes.List()
 
 	data.Combined = aws.CombineInstances(
 		data.ASGInstances, data.EC2Instances, data.SpotInstances,
@@ -114,6 +119,7 @@ func (s *Server) respondTemplate(w http.ResponseWriter, r *http.Request, name st
 	t := template.New("")
 
 	t = t.Funcs(template.FuncMap{
+		"StringTitle": strings.Title,
 		"PrettyTime": func(value interface{}) (string, error) {
 			tPtr, ok := value.(*time.Time)
 			if ok {

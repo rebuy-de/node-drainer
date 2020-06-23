@@ -35,6 +35,10 @@ type Instance struct {
 	TerminationTime   *time.Time `logfield:"ec2-termination-time,omitempty"`
 }
 
+func (i Instance) IsRunning() bool {
+	return i.State == InstanceStateRunning
+}
+
 // Changed returns true, if relevant fields of the instance changed.
 func (i Instance) Changed(old Instance) bool {
 	return i.State != old.State

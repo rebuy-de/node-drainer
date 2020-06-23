@@ -107,7 +107,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 	InstMainLoopStarted(ctx, combined)
 
 	// Mark all instances as complete immediately.
-	for _, instance := range combined.Select(collectors.IsWaiting) {
+	for _, instance := range combined.Select(collectors.WantsShutdown) {
 		InstMainLoopCompletingInstance(ctx, instance)
 
 		err := l.asg.Complete(ctx, instance.InstanceID)

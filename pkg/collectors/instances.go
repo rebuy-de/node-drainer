@@ -19,6 +19,52 @@ type Instance struct {
 	Node node.Node     `logfield:",squash"`
 }
 
+// NodeName returns the NodeName which it tries to get from Kubernetes or EC2
+// data. Returns an empty string, if the NodeName could not been determinated.
+func (i *Instance) NodeName() string {
+	if i == nil {
+		return ""
+	}
+
+	if i.Node.NodeName != "" {
+		return i.Node.NodeName
+	}
+
+	if i.EC2.NodeName != "" {
+		return i.EC2.NodeName
+	}
+
+	return ""
+}
+
+func HasEC2Data(i *Instance) bool    { return i.HasEC2Data() }
+func (i *Instance) HasEC2Data() bool { return i != nil && i.EC2.InstanceID != "" }
+
+func (i *Instance) HasASGData() bool { return i != nil && i.ASG.ID != "" }
+
+func WantsShutdown(i *Instance) bool { return i.WantsShutdown() }
+func (i *Instance) WantsShutdown() bool {
+	return i.HasASGData() && i.HasEC2Data() && i.EC2.IsRunning() && i.ASG.Completed == false
+}
+
+func HasLifecycleMessage(i *Instance) bool { return i.HasLifecycleMessage() }
+func (i *Instance) HasLifecycleMessage() bool {
+	return i.HasASGData() && i.ASG.Deleted == false
+}
+
+func HasEC2State(states ...string) Selector {
+	return func(i *Instance) bool { return i.HasEC2State(states...) }
+}
+func (i *Instance) HasEC2State(states ...string) bool {
+	for _, state := range states {
+		if i.EC2.State == state {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Instances is a collection of Instance types with some additional functions.
 type Instances []Instance
 

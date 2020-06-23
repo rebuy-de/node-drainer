@@ -52,14 +52,14 @@
               <th>Launch Time</th>
               <th>Triggered At</th>
               <th>Termination Time</th>
-              <th>Taints</th>
+              <th>Properties</th>
             </tr>
           </thead>
           <tbody>
               {{ range .Combined }}
               <tr>
                 <td>{{ .InstanceID }}</td>
-                <td>{{ .EC2.HostName }}</td>
+                <td>{{ .NodeName }}</td>
                 <td>{{ .EC2.InstanceName }}</td>
                 <td>
                     {{ if eq .EC2.State "running" }}
@@ -77,7 +77,12 @@
                 <td>{{ PrettyTime .EC2.LaunchTime }}</td>
                 <td>{{ PrettyTime .ASG.TriggeredAt }}</td>
                 <td>{{ PrettyTime .EC2.TerminationTime }}</td>
-                <td>{{ template "pretty_node_taints" .Node.Taints }}</td>
+                <td>
+                    {{ if .WantsShutdown }}
+                        <span class="badge badge-warning">WantsShutdown</span>
+                    {{ end }}
+                    {{ template "pretty_node_taints" .Node.Taints }}
+                </td>
               </tr>
             {{ end }}
           </tbody>

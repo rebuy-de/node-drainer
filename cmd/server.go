@@ -114,8 +114,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 
 	data.Combined = collectors.CombineInstances(
 		data.ASGInstances, data.EC2Instances, data.SpotInstances, data.Nodes,
-	).Select(collectors.HasLifecycleMessage).
-		Sort(collectors.ByInstanceID).Sort(collectors.ByLaunchTime).SortReverse(collectors.ByTriggeredAt)
+	).
+		Select(collectors.HasEC2Data).
+		Sort(collectors.ByInstanceID).
+		Sort(collectors.ByLaunchTime).
+		Sort(collectors.ByEC2State).
+		SortReverse(collectors.ByTriggeredAt)
 
 	s.respondTemplate(w, r, "status.html", data)
 }

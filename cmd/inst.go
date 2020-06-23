@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/instutil"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 )
 
@@ -29,7 +29,7 @@ func InitIntrumentation(ctx context.Context) context.Context {
 	return ctx
 }
 
-func InstMainLoopStarted(ctx context.Context, instances aws.Instances) {
+func InstMainLoopStarted(ctx context.Context, instances collectors.Instances) {
 	c, ok := instutil.Counter(ctx, metricMainLoopIterations)
 	if ok {
 		c.Inc()
@@ -41,20 +41,20 @@ func InstMainLoopStarted(ctx context.Context, instances aws.Instances) {
 		// lifecycle message and are not completed yet. But since we are now
 		// still watching the old node-drainer, this schould be fine.
 		g.Set(float64(len(instances.
-			Select(aws.HasEC2State(ec2.InstanceStateRunning)).
-			Select(aws.HasLifecycleMessage),
+			Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
+			Select(collectors.HasLifecycleMessage),
 		)))
 	}
 
 }
 
-func InstMainLoopCompletingInstance(ctx context.Context, instance aws.Instance) {
+func InstMainLoopCompletingInstance(ctx context.Context, instance collectors.Instance) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).
 		Info("marking node as complete")
 }
 
-func InstMainLoopInstanceStateChanged(ctx context.Context, instance aws.Instance, prevState, currState string) {
+func InstMainLoopInstanceStateChanged(ctx context.Context, instance collectors.Instance, prevState, currState string) {
 	logger := logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance))
 
@@ -71,13 +71,13 @@ func InstMainLoopInstanceStateChanged(ctx context.Context, instance aws.Instance
 	}
 }
 
-func InstMainLoopDeletingLifecycleMessage(ctx context.Context, instance aws.Instance) {
+func InstMainLoopDeletingLifecycleMessage(ctx context.Context, instance collectors.Instance) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).
 		Info("deleting lifecycle message from SQS")
 }
 
-func InstMainLoopDeletingLifecycleMessageAgeSanityCheckFailed(ctx context.Context, instance aws.Instance, age time.Duration) {
+func InstMainLoopDeletingLifecycleMessageAgeSanityCheckFailed(ctx context.Context, instance collectors.Instance, age time.Duration) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).
 		Warnf("termination time of %s was triggered just %v ago, assuming that the cache was empty",

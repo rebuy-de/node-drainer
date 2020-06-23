@@ -26,7 +26,7 @@ const (
 type Instance struct {
 	InstanceID        string     `logfield:"instance-id"`
 	InstanceName      string     `logfield:"instance-name"`
-	HostName          string     `logfield:"node-name"`
+	NodeName          string     `logfield:"node-name"`
 	InstanceType      string     `logfield:"instance-type"`
 	AvailabilityZone  string     `logfield:"availability-zone"`
 	InstanceLifecycle string     `logfield:"ec2-instance-lifecycle"`
@@ -202,7 +202,7 @@ func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 
 				instance := Instance{
 					InstanceID:        id,
-					HostName:          aws.StringValue(dto.PrivateDnsName),
+					NodeName:          aws.StringValue(dto.PrivateDnsName),
 					State:             aws.StringValue(dto.State.Name),
 					InstanceType:      aws.StringValue(dto.InstanceType),
 					InstanceName:      ec2tag(dto, "Name"),

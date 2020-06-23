@@ -15,12 +15,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/webutil"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/node"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/pod"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 )
 
 // Healthier is a simple interface, that can easily be implemented by all
@@ -75,11 +75,12 @@ type Server struct {
 func (s *Server) Run(ctx context.Context) error {
 	h := HealthHandler{
 		services: map[string]Healthier{
-			"ec2":      s.ec2,
-			"asg":      s.asg,
-			"spot":     s.spot,
-			"nodes":    s.nodes,
-			"pods":     s.pods,
+			"ec2":   s.ec2,
+			"asg":   s.asg,
+			"spot":  s.spot,
+			"nodes": s.nodes,
+			"pods":  s.pods,
+
 			"mainloop": s.mainloop,
 		},
 	}
@@ -102,7 +103,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 		Nodes         []node.Node
 		Pods          []pod.Pod
 
-		Combined aws.Instances
+		Combined collectors.Instances
 	}{}
 
 	data.ASGInstances = s.asg.List()
@@ -111,10 +112,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data.Nodes = s.nodes.List()
 	data.Pods = s.pods.List()
 
-	data.Combined = aws.CombineInstances(
-		data.ASGInstances, data.EC2Instances, data.SpotInstances,
-	).Select(aws.HasLifecycleMessage).
-		Sort(aws.ByInstanceID).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
+	data.Combined = collectors.CombineInstances(
+		data.ASGInstances, data.EC2Instances, data.SpotInstances, data.Nodes,
+	).Select(collectors.HasLifecycleMessage).
+		Sort(collectors.ByInstanceID).Sort(collectors.ByLaunchTime).SortReverse(collectors.ByTriggeredAt)
 
 	s.respondTemplate(w, r, "status.html", data)
 }

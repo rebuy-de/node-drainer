@@ -15,6 +15,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/node"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/pod"
 )
 
 type Runner struct {
@@ -55,6 +56,7 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	ec2Client := ec2.New(awsSession, 1*time.Second)
 	spotClient := spot.New(awsSession, 1*time.Second)
 	nodeClient := node.New(kubeInterface)
+	podClient := pod.New(kubeInterface)
 
 	mainLoop := NewMainLoop(asgClient, ec2Client, spotClient)
 
@@ -63,6 +65,7 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 		asg:      asgClient,
 		spot:     spotClient,
 		nodes:    nodeClient,
+		pods:     podClient,
 		mainloop: mainLoop,
 	}
 
@@ -78,6 +81,9 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(nodeClient.Run(ctx), "failed to run Kubernetes node client")
+	})
+	egrp.Go(func() error {
+		return errors.Wrap(podClient.Run(ctx), "failed to run Kubernetes node client")
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(server.Run(ctx), "failed to run HTTP server")

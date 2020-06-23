@@ -20,6 +20,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/node"
+	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/pod"
 )
 
 // Healthier is a simple interface, that can easily be implemented by all
@@ -65,6 +66,7 @@ type Server struct {
 	ec2   ec2.Client
 	spot  spot.Client
 	nodes node.Client
+	pods  pod.Client
 
 	mainloop *MainLoop
 }
@@ -76,6 +78,8 @@ func (s *Server) Run(ctx context.Context) error {
 			"ec2":      s.ec2,
 			"asg":      s.asg,
 			"spot":     s.spot,
+			"nodes":    s.nodes,
+			"pods":     s.pods,
 			"mainloop": s.mainloop,
 		},
 	}
@@ -96,6 +100,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 		EC2Instances  []ec2.Instance
 		SpotInstances []spot.Instance
 		Nodes         []node.Node
+		Pods          []pod.Pod
 
 		Combined aws.Instances
 	}{}
@@ -104,6 +109,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data.EC2Instances = s.ec2.List()
 	data.SpotInstances = s.spot.List()
 	data.Nodes = s.nodes.List()
+	data.Pods = s.pods.List()
 
 	data.Combined = aws.CombineInstances(
 		data.ASGInstances, data.EC2Instances, data.SpotInstances,

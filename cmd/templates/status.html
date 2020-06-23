@@ -135,7 +135,7 @@
           </tbody>
         </table>
 
-        <h3>Kubernetes</h3>
+        <h3>Kubernetes Nodes</h3>
 
         <table class="table table-hover table-sm table-wide">
           <thead>
@@ -164,6 +164,12 @@
                       <span title="{{ .ToString }}" class="badge badge-info">Master</span>
                     {{ else if eq .Key "node.kubernetes.io/unschedulable" }}
                       <span title="{{ .ToString }}" class="badge badge-warning">Unschedulable</span>
+                    {{ else if eq .Key "DeletionCandidateOfClusterAutoscaler" }}
+                      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
+                    {{ else if eq .Key "ToBeDeletedByClusterAutoscaler" }}
+                      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
+                    {{ else if eq .Key "node.kubernetes.io/not-ready" }}
+                      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
                     {{ else if eq .Key "rebuy.com/pool" }}
                       <span title="{{ .ToString }}" class="badge badge-info">{{ .Value | StringTitle }}</span>
                     {{ else }}
@@ -220,6 +226,38 @@
             {{ end }}
           </tbody>
         </table>
+
+        <h3>Pods</h3>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Node Name</th>
+              <th>Pod Name</th>
+              <th>Namespace</th>
+              <th>Created Time</th>
+              <th>Ready</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{ range .Pods }}
+              <tr>
+                <td>{{ .NodeName }}</td>
+                <td>{{ .Name}}</td>
+                <td>{{ .Namespace}}</td>
+                <td>{{ PrettyTime .CreatedTime }}</td>
+                <td>
+                  {{ if .Ready}}
+                        <span class="badge badge-success">Ready</span>
+                  {{ else }}
+                        <span class="badge badge-danger">Unready</span>
+                  {{ end }}
+                </td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
 
     </div>
   </body>

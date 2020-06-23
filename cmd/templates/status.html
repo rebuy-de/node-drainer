@@ -31,7 +31,8 @@
       <a class="navbar-brand" href="">NodeDrainer</a>
 
       <ul class="navbar-nav mr-auto">
-        <li class="nav-item"><a class="nav-link" href="#combined">Combined</a></li>
+        <li class="nav-item"><a class="nav-link" href="#combined-pods">Combined Pods</a></li>
+        <li class="nav-item"><a class="nav-link" href="#combined-instances">Combined Instances</a></li>
         <li class="nav-item"><a class="nav-link" href="#spot-requests">Spot Requests</a></li>
         <li class="nav-item"><a class="nav-link" href="#asg-lifecycle">ASG Lifecycle</a></li>
         <li class="nav-item"><a class="nav-link" href="#kubernetes-nodes">Kubernetes Nodes</a></li>
@@ -43,8 +44,46 @@
     <div class="container-flex" style="margin-top:5em;">
         <h1>Status Page</h1>
 
-        <h3>Combined</h3>
-        <a class="anchor" id="combined"></a>
+        <h3>Combined Pods</h3>
+        <a class="anchor" id="combined-pods"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Node Name</th>
+              <th>Pod Name</th>
+              <th>Ready</th>
+              <th>Eviction</th>
+            </tr>
+          </thead>
+          <tbody>
+              {{ range .CombinedPods }}
+              <tr>
+                <td>{{ .Instance.InstanceID }}</td>
+                <td>{{ .NodeName }}</td>
+                <td>{{ .Name}}</td>
+                <td>
+                  {{ if .Ready}}
+                        <span class="badge badge-success">Ready</span>
+                  {{ else }}
+                        <span class="badge badge-danger">Unready</span>
+                  {{ end }}
+                </td>
+                <td>
+                  {{ if .NeedsEviction }}
+                    <span class="badge badge-warning">Eviction Needed</span>
+                  {{ else }}
+                    <span class="badge badge-success">Eviction Not Needed</span>
+                  {{ end }}
+                </td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
+        <h3>Combined Instances</h3>
+        <a class="anchor" id="combined-instances"></a>
 
         <table class="table table-hover table-sm table-wide">
           <thead>
@@ -60,7 +99,7 @@
             </tr>
           </thead>
           <tbody>
-              {{ range .Combined }}
+              {{ range .CombinedInstances }}
               <tr>
                 <td>{{ .InstanceID }}</td>
                 <td>{{ .NodeName }}</td>

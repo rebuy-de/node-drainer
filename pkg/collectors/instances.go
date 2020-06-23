@@ -19,26 +19,10 @@ type Instance struct {
 	Node node.Node     `logfield:",squash"`
 }
 
-// NodeName returns the NodeName which it tries to get from Kubernetes or EC2
-// data. Returns an empty string, if the NodeName could not been determinated.
-func (i *Instance) NodeName() string {
-	if i == nil {
-		return ""
-	}
-
-	if i.Node.NodeName != "" {
-		return i.Node.NodeName
-	}
-
-	if i.EC2.NodeName != "" {
-		return i.EC2.NodeName
-	}
-
-	return ""
+func HasEC2Data(i *Instance) bool { return i.HasEC2Data() }
+func (i *Instance) HasEC2Data() bool {
+	return i != nil && i.EC2.InstanceID != ""
 }
-
-func HasEC2Data(i *Instance) bool    { return i.HasEC2Data() }
-func (i *Instance) HasEC2Data() bool { return i != nil && i.EC2.InstanceID != "" }
 
 func (i *Instance) HasASGData() bool { return i != nil && i.ASG.ID != "" }
 

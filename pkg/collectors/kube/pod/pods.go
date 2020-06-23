@@ -124,7 +124,7 @@ func (c *client) List() []Pod {
 	})
 
 	sort.SliceStable(result, func(i, j int) bool {
-		return result[i].CreatedTime.Before(result[j].CreatedTime)
+		return result[j].CreatedTime.Before(result[i].CreatedTime)
 	})
 
 	return result

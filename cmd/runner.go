@@ -11,11 +11,11 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/node"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/kube/pod"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 )
 
 type Runner struct {
@@ -58,7 +58,7 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	nodeClient := node.New(kubeInterface)
 	podClient := pod.New(kubeInterface)
 
-	mainLoop := NewMainLoop(asgClient, ec2Client, spotClient)
+	mainLoop := NewMainLoop(asgClient, ec2Client, spotClient, nodeClient, podClient)
 
 	server := &Server{
 		ec2:      ec2Client,

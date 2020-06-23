@@ -1,6 +1,6 @@
-package aws
+package collectors
 
-import "github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
+import "github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 
 // By is a function type that defines the order and is used by Sort and
 // SortReverse.

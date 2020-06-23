@@ -52,6 +52,7 @@
               <th>Launch Time</th>
               <th>Triggered At</th>
               <th>Termination Time</th>
+              <th>Taints</th>
             </tr>
           </thead>
           <tbody>
@@ -76,6 +77,7 @@
                 <td>{{ PrettyTime .EC2.LaunchTime }}</td>
                 <td>{{ PrettyTime .ASG.TriggeredAt }}</td>
                 <td>{{ PrettyTime .EC2.TerminationTime }}</td>
+                <td>{{ template "pretty_node_taints" .Node.Taints }}</td>
               </tr>
             {{ end }}
           </tbody>
@@ -179,23 +181,7 @@
                   {{ end }}
                 </td>
                 <td>
-                  {{ range .Taints }}
-                    {{ if eq .Key "node-role.kubernetes.io/master" }}
-                      <span title="{{ .ToString }}" class="badge badge-info">Master</span>
-                    {{ else if eq .Key "node.kubernetes.io/unschedulable" }}
-                      <span title="{{ .ToString }}" class="badge badge-warning">Unschedulable</span>
-                    {{ else if eq .Key "DeletionCandidateOfClusterAutoscaler" }}
-                      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
-                    {{ else if eq .Key "ToBeDeletedByClusterAutoscaler" }}
-                      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
-                    {{ else if eq .Key "node.kubernetes.io/not-ready" }}
-                      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
-                    {{ else if eq .Key "rebuy.com/pool" }}
-                      <span title="{{ .ToString }}" class="badge badge-info">{{ .Value | StringTitle }}</span>
-                    {{ else }}
-                      <code>{{ .ToString }}</code>
-                    {{ end }}
-                  {{ end }}
+                  {{ template "pretty_node_taints" .Taints }}
                 </td>
               </tr>
             {{ end }}
@@ -209,7 +195,7 @@
           <thead>
             <tr>
               <th>Instance ID</th>
-              <th>Host Name</th>
+              <th>Node Name</th>
               <th>Instance Name</th>
               <th>Type</th>
               <th>AZ</th>
@@ -223,7 +209,7 @@
             {{ range .EC2Instances }}
               <tr>
                 <td>{{ .InstanceID }}</td>
-                <td>{{ .HostName }}</td>
+                <td>{{ .NodeName }}</td>
                 <td>{{ .InstanceName }}</td>
                 <td>{{ .InstanceType }}</td>
                 <td>{{ .AvailabilityZone }}</td>

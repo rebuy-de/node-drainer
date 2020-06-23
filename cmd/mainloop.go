@@ -5,10 +5,12 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/ec2"
-	"github.com/rebuy-de/node-drainer/v2/pkg/integration/aws/spot"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 )
@@ -23,19 +25,24 @@ type MainLoop struct {
 
 	failureCount int
 
-	asg  asg.Client
-	ec2  ec2.Client
-	spot spot.Client
+	asg   asg.Client
+	ec2   ec2.Client
+	spot  spot.Client
+	nodes node.Client
+	pods  pod.Client
 }
 
 // NewMainLoop initializes a MainLoop.
-func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client, spotClient spot.Client) *MainLoop {
+func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client, spotClient spot.Client,
+	nodeClient node.Client, podClient pod.Client) *MainLoop {
 	ml := new(MainLoop)
 
 	ml.stateCache = map[string]string{}
 	ml.asg = asgClient
 	ml.ec2 = ec2Client
 	ml.spot = spotClient
+	ml.nodes = nodeClient
+	ml.pods = podClient
 	ml.triggerLoop = new(syncutil.SignalEmitter)
 
 	ml.signaler = syncutil.SignalerFromEmitters(
@@ -90,16 +97,17 @@ func (l *MainLoop) Run(ctx context.Context) error {
 func (l *MainLoop) runOnce(ctx context.Context) error {
 	ctx = logutil.Start(ctx, "loop")
 
-	combined := aws.CombineInstances(
+	combined := collectors.CombineInstances(
 		l.asg.List(),
 		l.ec2.List(),
 		l.spot.List(),
-	).Sort(aws.ByLaunchTime).SortReverse(aws.ByTriggeredAt)
+		l.nodes.List(),
+	).Sort(collectors.ByLaunchTime).SortReverse(collectors.ByTriggeredAt)
 
 	InstMainLoopStarted(ctx, combined)
 
 	// Mark all instances as complete immediately.
-	for _, instance := range combined.Select(aws.IsWaiting) {
+	for _, instance := range combined.Select(collectors.IsWaiting) {
 		InstMainLoopCompletingInstance(ctx, instance)
 
 		err := l.asg.Complete(ctx, instance.InstanceID)
@@ -132,7 +140,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 	}
 
 	// Clean up old messages
-	for _, instance := range combined.Filter(aws.HasEC2Data).Select(aws.HasLifecycleMessage) {
+	for _, instance := range combined.Filter(collectors.HasEC2Data).Select(collectors.HasLifecycleMessage) {
 		InstMainLoopDeletingLifecycleMessage(ctx, instance)
 
 		age := time.Since(instance.ASG.TriggeredAt)

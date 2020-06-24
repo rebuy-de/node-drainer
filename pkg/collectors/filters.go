@@ -1,5 +1,7 @@
 package collectors
 
+import "strings"
+
 // By is a function type that defines the order and is used by Sort and
 // SortReverse.
 type By func(i1, i2 *Instance) bool
@@ -21,7 +23,14 @@ func ByTriggeredAt(i1, i2 *Instance) bool {
 }
 
 func ByEC2State(i1, i2 *Instance) bool {
-	return i1.EC2.State < i2.EC2.State
+	// The state simply gets looked up in this list and the ordering happens by
+	// the returned index. If the state does not get found, the index is -1 and
+	// therefore it will be put at the beginning of the list.
+	const ec2StateOrder = "pending running stopping stopped shutting-down terminated"
+
+	order1 := strings.Index(ec2StateOrder, i1.EC2.State)
+	order2 := strings.Index(ec2StateOrder, i2.EC2.State)
+	return order1 < order2
 }
 
 // Selector is a function type that defines if an instance should be selected

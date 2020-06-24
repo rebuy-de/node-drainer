@@ -113,7 +113,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data.Nodes = s.nodes.List()
 	data.Pods = s.pods.List()
 
-	allCombined := collectors.CombineInstances(
+	instances := collectors.CombineInstances(
 		data.ASGInstances, data.EC2Instances, data.SpotInstances, data.Nodes,
 	).
 		Sort(collectors.ByInstanceID).
@@ -121,10 +121,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 		Sort(collectors.ByEC2State).
 		SortReverse(collectors.ByTriggeredAt)
 
-	data.CombinedInstances = allCombined.
+	data.CombinedInstances = instances.
 		Select(collectors.HasEC2Data)
 
-	data.CombinedPods = collectors.CombinePods(allCombined, data.Pods).
+	data.CombinedPods = collectors.CombinePods(instances, data.Pods).
 		Sort(collectors.PodsByNeedsEviction)
 
 	s.respondTemplate(w, r, "status.html", data)

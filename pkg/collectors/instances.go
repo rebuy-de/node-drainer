@@ -19,26 +19,22 @@ type Instance struct {
 	Node node.Node     `logfield:",squash"`
 }
 
-func HasEC2Data(i *Instance) bool { return i.HasEC2Data() }
 func (i *Instance) HasEC2Data() bool {
 	return i != nil && i.EC2.InstanceID != ""
 }
 
-func (i *Instance) HasASGData() bool { return i != nil && i.ASG.ID != "" }
+func (i *Instance) HasASGData() bool {
+	return i != nil && i.ASG.ID != ""
+}
 
-func WantsShutdown(i *Instance) bool { return i.WantsShutdown() }
 func (i *Instance) WantsShutdown() bool {
 	return i.HasASGData() && i.HasEC2Data() && i.EC2.IsRunning() && i.ASG.Completed == false
 }
 
-func HasLifecycleMessage(i *Instance) bool { return i.HasLifecycleMessage() }
 func (i *Instance) HasLifecycleMessage() bool {
 	return i.HasASGData() && i.ASG.Deleted == false
 }
 
-func HasEC2State(states ...string) Selector {
-	return func(i *Instance) bool { return i.HasEC2State(states...) }
-}
 func (i *Instance) HasEC2State(states ...string) bool {
 	for _, state := range states {
 		if i.EC2.State == state {

@@ -32,7 +32,3 @@ func ByEC2State(i1, i2 *Instance) bool {
 	order2 := strings.Index(ec2StateOrder, i2.EC2.State)
 	return order1 < order2
 }
-
-// Selector is a function type that defines if an instance should be selected
-// and is used by Select and Filter.
-type Selector func(i *Instance) bool

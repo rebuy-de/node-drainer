@@ -103,7 +103,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 		Nodes         []node.Node
 		Pods          []pod.Pod
 
-		Combined collectors.Instances
+		CombinedInstances collectors.Instances
+		CombinedPods      collectors.Pods
 	}{}
 
 	data.ASGInstances = s.asg.List()
@@ -112,14 +113,19 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data.Nodes = s.nodes.List()
 	data.Pods = s.pods.List()
 
-	data.Combined = collectors.CombineInstances(
+	instances := collectors.CombineInstances(
 		data.ASGInstances, data.EC2Instances, data.SpotInstances, data.Nodes,
 	).
-		Select(collectors.HasEC2Data).
 		Sort(collectors.ByInstanceID).
 		Sort(collectors.ByLaunchTime).
 		Sort(collectors.ByEC2State).
 		SortReverse(collectors.ByTriggeredAt)
+
+	data.CombinedInstances = instances.
+		Select(collectors.HasEC2Data)
+
+	data.CombinedPods = collectors.CombinePods(instances, data.Pods).
+		Sort(collectors.PodsByNeedsEviction)
 
 	s.respondTemplate(w, r, "status.html", data)
 }

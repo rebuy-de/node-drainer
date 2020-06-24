@@ -9,6 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -26,8 +27,18 @@ type Pod struct {
 	AppVersion   string `logfield:"-"`
 	AppComponent string `logfield:"-"`
 
+	OwnerKind   string    `logfield:"pod-owner-kind"`
+	OwnerName   string    `logfield:"pod-owner-name"`
 	Ready       bool      `logfield:"pod-ready"`
 	CreatedTime time.Time `logfield:"pod-created-time"`
+}
+
+func (p *Pod) ImmuneToEviction() bool {
+	if p == nil {
+		return true
+	}
+
+	return p.OwnerKind == "DaemonSet"
 }
 
 type Client interface {
@@ -85,34 +96,41 @@ func (c *client) List() []Pod {
 		return nil
 	}
 
-	for _, pod := range list {
-		labels := pod.ObjectMeta.Labels
+	for _, obj := range list {
+		labels := obj.ObjectMeta.Labels
 		if labels == nil {
 			// empty map, so retrieving a key fails silently
 			labels = map[string]string{}
 		}
 
-		ready := true
-		for _, condition := range pod.Status.Conditions {
-			if condition.Status != v1.ConditionTrue {
-				ready = false
-				break
-			}
-		}
+		pod := Pod{
+			Name:      obj.ObjectMeta.Name,
+			Namespace: obj.ObjectMeta.Namespace,
+			NodeName:  obj.Spec.NodeName,
 
-		result = append(result, Pod{
-			Name:      pod.ObjectMeta.Name,
-			Namespace: pod.ObjectMeta.Namespace,
-			NodeName:  pod.Spec.NodeName,
-
-			Ready:       ready,
-			CreatedTime: pod.ObjectMeta.CreationTimestamp.Time,
+			CreatedTime: obj.ObjectMeta.CreationTimestamp.Time,
 
 			AppName:      labels["app.kubernetes.io/name"],
 			AppInstance:  labels["app.kubernetes.io/instance"],
 			AppVersion:   labels["app.kubernetes.io/version"],
 			AppComponent: labels["app.kubernetes.io/component"],
-		})
+		}
+
+		pod.Ready = true
+		for _, condition := range obj.Status.Conditions {
+			if condition.Status != v1.ConditionTrue {
+				pod.Ready = false
+				break
+			}
+		}
+
+		owner := meta_v1.GetControllerOf(obj)
+		if owner != nil {
+			pod.OwnerName = owner.Name
+			pod.OwnerKind = owner.Kind
+		}
+
+		result = append(result, pod)
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -124,7 +142,7 @@ func (c *client) List() []Pod {
 	})
 
 	sort.SliceStable(result, func(i, j int) bool {
-		return result[i].CreatedTime.Before(result[j].CreatedTime)
+		return result[j].CreatedTime.Before(result[i].CreatedTime)
 	})
 
 	return result

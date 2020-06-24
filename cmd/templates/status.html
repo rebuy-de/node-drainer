@@ -10,8 +10,12 @@
     <title>NodeDrainer</title>
 
     <style>
+        table.table-wide {
+            width: auto !important;
+        }
+
         table.table-wide td, table.table-wide th {
-            white-space:nowrap;
+            white-space: nowrap;
         }
 
         a.anchor {
@@ -22,12 +26,13 @@
         }
     </style>
   </head>
-  <body class="mb-4">
+  <body class="mb-4 ml-3 mr-3">
     <nav class="navbar fixed-top navbar-expand navbar-dark bg-dark">
       <a class="navbar-brand" href="">NodeDrainer</a>
 
       <ul class="navbar-nav mr-auto">
-        <li class="nav-item"><a class="nav-link" href="#combined">Combined</a></li>
+        <li class="nav-item"><a class="nav-link" href="#combined-pods">Combined Pods</a></li>
+        <li class="nav-item"><a class="nav-link" href="#combined-instances">Combined Instances</a></li>
         <li class="nav-item"><a class="nav-link" href="#spot-requests">Spot Requests</a></li>
         <li class="nav-item"><a class="nav-link" href="#asg-lifecycle">ASG Lifecycle</a></li>
         <li class="nav-item"><a class="nav-link" href="#kubernetes-nodes">Kubernetes Nodes</a></li>
@@ -36,11 +41,56 @@
       </ul>
     </nav>
 
-    <div class="container" style="margin-top:5em;">
+    <div class="container-flex" style="margin-top:5em;">
         <h1>Status Page</h1>
 
-        <h3>Combined</h3>
-        <a class="anchor" id="combined"></a>
+        <h3>Combined Pods</h3>
+        <a class="anchor" id="combined-pods"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Node Name</th>
+              <th>Pod Name</th>
+              <th>Ready</th>
+              <th>Properties</th>
+            </tr>
+          </thead>
+          <tbody>
+              {{ range .CombinedPods }}
+              <tr>
+                <td>{{ .Instance.InstanceID }}</td>
+                <td>{{ .NodeName }}</td>
+                <td>{{ .Name}}</td>
+                <td>
+                  {{ if .Ready}}
+                        <span class="badge badge-success">Ready</span>
+                  {{ else }}
+                        <span class="badge badge-danger">Unready</span>
+                  {{ end }}
+                </td>
+                <td>
+                  {{ if ne .Pod.OwnerKind "" }}
+                    <span class="badge badge-info" title="{{ .Pod.OwnerName }}">{{ .Pod.OwnerKind }}</span>
+                  {{ end }}
+                  {{ if .Instance.WantsShutdown }}
+                    <span class="badge badge-warning">Node Wants Shutdown</span>
+                  {{ end }}
+                  {{ if .NeedsEviction }}
+                    <span class="badge badge-warning">Pod Needs Eviction</span>
+                  {{ end }}
+                  {{ if .Pod.ImmuneToEviction }}
+                    <span class="badge badge-primary">Pod Immune To Eviction</span>
+                  {{ end }}
+                </td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+
+        <h3>Combined Instances</h3>
+        <a class="anchor" id="combined-instances"></a>
 
         <table class="table table-hover table-sm table-wide">
           <thead>
@@ -56,7 +106,7 @@
             </tr>
           </thead>
           <tbody>
-              {{ range .Combined }}
+              {{ range .CombinedInstances }}
               <tr>
                 <td>{{ .InstanceID }}</td>
                 <td>{{ .NodeName }}</td>
@@ -250,6 +300,7 @@
               <th>Namespace</th>
               <th>Created Time</th>
               <th>Ready</th>
+              <th>Owner</th>
             </tr>
           </thead>
           <tbody>
@@ -264,6 +315,14 @@
                         <span class="badge badge-success">Ready</span>
                   {{ else }}
                         <span class="badge badge-danger">Unready</span>
+                  {{ end }}
+                </td>
+                <td>
+                  {{ if eq .OwnerKind "" }}
+                    <span class="badge badge-info">Local</span>
+                  {{ else }}
+                    <span class="badge badge-info">{{ .OwnerKind }}</span>
+                    <code>{{ .OwnerName }}</code>
                   {{ end }}
                 </td>
               </tr>

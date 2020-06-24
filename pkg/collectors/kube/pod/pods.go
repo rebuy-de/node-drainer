@@ -5,16 +5,19 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	v1 "k8s.io/api/core/v1"
-	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
-	informers_v1 "k8s.io/client-go/informers/core/v1"
+	apps_informers "k8s.io/client-go/informers/apps/v1"
+	core_informers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 type Pod struct {
@@ -27,10 +30,11 @@ type Pod struct {
 	AppVersion   string `logfield:"-"`
 	AppComponent string `logfield:"-"`
 
-	OwnerKind   string    `logfield:"pod-owner-kind"`
-	OwnerName   string    `logfield:"pod-owner-name"`
-	Ready       bool      `logfield:"pod-ready"`
-	CreatedTime time.Time `logfield:"pod-created-time"`
+	OwnerKind   string           `logfield:"pod-owner-kind"`
+	OwnerName   string           `logfield:"pod-owner-name"`
+	OwnerReady  OwnerReadyReason `logfield:",squash"`
+	Ready       bool             `logfield:"pod-ready"`
+	CreatedTime time.Time        `logfield:"pod-created-time"`
 }
 
 func (p *Pod) ImmuneToEviction() bool {
@@ -38,7 +42,7 @@ func (p *Pod) ImmuneToEviction() bool {
 		return true
 	}
 
-	return p.OwnerKind == "DaemonSet"
+	return p.OwnerKind == "DaemonSet" || p.OwnerKind == "Node"
 }
 
 type Client interface {
@@ -48,7 +52,7 @@ type Client interface {
 
 	// List returns all EC2 Instances that are currently in the cache. Those
 	// instance cache will be updated in the background.
-	List() []Pod
+	List(context.Context) []Pod
 
 	// SignalEmitter gets triggered every time the cache changes. See syncutil
 	// package for more information.
@@ -63,31 +67,35 @@ type client struct {
 	cache   map[string]Pod
 	emitter *syncutil.SignalEmitter
 
-	factory informers.SharedInformerFactory
-	pods    informers_v1.PodInformer
+	pods   core_informers.PodInformer
+	rs     apps_informers.ReplicaSetInformer
+	sts    apps_informers.StatefulSetInformer
+	deploy apps_informers.DeploymentInformer
 }
 
 func New(kube kubernetes.Interface) Client {
-	factory := informers.NewSharedInformerFactory(kube, 5*time.Second)
-	pods := factory.Core().V1().Pods()
-
 	return &client{
 		kube: kube,
 
-		factory: factory,
-		pods:    pods,
+		pods:   informers.NewSharedInformerFactory(kube, 5*time.Second).Core().V1().Pods(),
+		rs:     informers.NewSharedInformerFactory(kube, 5*time.Second).Apps().V1().ReplicaSets(),
+		sts:    informers.NewSharedInformerFactory(kube, 5*time.Second).Apps().V1().StatefulSets(),
+		deploy: informers.NewSharedInformerFactory(kube, 5*time.Second).Apps().V1().Deployments(),
 	}
 }
 
 func (c *client) Healthy() bool {
-	return c.pods.Informer().HasSynced()
+	return c.pods.Informer().HasSynced() &&
+		c.rs.Informer().HasSynced() &&
+		c.sts.Informer().HasSynced() &&
+		c.deploy.Informer().HasSynced()
 }
 
 func (c *client) SignalEmitter() *syncutil.SignalEmitter {
 	return c.emitter
 }
 
-func (c *client) List() []Pod {
+func (c *client) List(ctx context.Context) []Pod {
 	result := []Pod{}
 
 	list, err := c.pods.Lister().List(labels.Everything())
@@ -124,10 +132,11 @@ func (c *client) List() []Pod {
 			}
 		}
 
-		owner := meta_v1.GetControllerOf(obj)
+		owner, ownerReady := c.getOwner(ctx, obj)
+		pod.OwnerReady = ownerReady
 		if owner != nil {
-			pod.OwnerName = owner.Name
 			pod.OwnerKind = owner.Kind
+			pod.OwnerName = owner.Name
 		}
 
 		result = append(result, pod)
@@ -151,6 +160,19 @@ func (c *client) List() []Pod {
 func (c *client) Run(ctx context.Context) error {
 	// Kubernetes serves an utility to handle API crashes
 	defer runtime.HandleCrash()
-	c.pods.Informer().Run(ctx.Done())
-	return nil
+
+	egrp, ctx := errgroup.WithContext(ctx)
+	run := func(name string, inf cache.SharedInformer) {
+		egrp.Go(func() error {
+			inf.Run(ctx.Done())
+			return errors.Errorf("informer for %s stopped", name)
+		})
+	}
+
+	run("Pods", c.pods.Informer())
+	run("ReplicaSets", c.rs.Informer())
+	run("StatefulSets", c.sts.Informer())
+	run("Deployments", c.deploy.Informer())
+
+	return errors.WithStack(egrp.Wait())
 }

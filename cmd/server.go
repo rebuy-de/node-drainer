@@ -3,10 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"sort"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/gobuffalo/packr/v2"
@@ -111,7 +111,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprout
 	data.EC2Instances = s.ec2.List()
 	data.SpotInstances = s.spot.List()
 	data.Nodes = s.nodes.List()
-	data.Pods = s.pods.List()
+	data.Pods = s.pods.List(r.Context())
 
 	instances := collectors.CombineInstances(
 		data.ASGInstances, data.EC2Instances, data.SpotInstances, data.Nodes,

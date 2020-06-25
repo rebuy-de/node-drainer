@@ -54,6 +54,7 @@
               <th>Node Name</th>
               <th>Pod Name</th>
               <th>Ready</th>
+              <th>Can Decement</th>
               <th>Properties</th>
             </tr>
           </thead>
@@ -67,7 +68,16 @@
                   {{ if .Ready}}
                         <span class="badge badge-success">Ready</span>
                   {{ else }}
-                        <span class="badge badge-danger">Unready</span>
+                        <span class="badge badge-warning">Unready</span>
+                  {{ end }}
+                </td>
+                <td>
+                  {{ if eq .OwnerReady.Short "UnknownKind" }}
+                    <span class="badge badge-warning" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
+                  {{ else if .OwnerReady.CanDecrement }}
+                    <span class="badge badge-success" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
+                  {{ else }}
+                    <span class="badge badge-danger" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
                   {{ end }}
                 </td>
                 <td>
@@ -300,6 +310,7 @@
               <th>Namespace</th>
               <th>Created Time</th>
               <th>Ready</th>
+              <th>Can Decement</th>
               <th>Owner</th>
             </tr>
           </thead>
@@ -307,22 +318,31 @@
             {{ range .Pods }}
               <tr>
                 <td>{{ .NodeName }}</td>
-                <td>{{ .Name}}</td>
-                <td>{{ .Namespace}}</td>
+                <td>{{ .Name }}</td>
+                <td>{{ .Namespace }}</td>
                 <td>{{ PrettyTime .CreatedTime }}</td>
                 <td>
                   {{ if .Ready}}
                         <span class="badge badge-success">Ready</span>
                   {{ else }}
-                        <span class="badge badge-danger">Unready</span>
+                        <span class="badge badge-warning">Unready</span>
+                  {{ end }}
+                </td>
+                <td>
+                  {{ if eq .OwnerReady.Short "UnknownKind" }}
+                    <span class="badge badge-warning" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
+                  {{ else if .OwnerReady.CanDecrement }}
+                    <span class="badge badge-success" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
+                  {{ else }}
+                    <span class="badge badge-danger" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
                   {{ end }}
                 </td>
                 <td>
                   {{ if eq .OwnerKind "" }}
-                    <span class="badge badge-info">Local</span>
+                    <span class="badge badge-warning">None</span>
                   {{ else }}
                     <span class="badge badge-info">{{ .OwnerKind }}</span>
-                    <code>{{ .OwnerName }}</code>
+                    {{ .OwnerName }}
                   {{ end }}
                 </td>
               </tr>

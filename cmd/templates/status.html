@@ -73,9 +73,6 @@
                   {{ end }}
                 </td>
                 <td>
-                  {{ if ne .Pod.OwnerKind "" }}
-                    <span class="badge badge-info" title="{{ .Pod.OwnerName }}">{{ .Pod.OwnerKind }}</span>
-                  {{ end }}
                   {{ if .Instance.WantsShutdown }}
                     <span class="badge badge-warning">Node Wants Shutdown</span>
                   {{ end }}

@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -33,7 +32,6 @@ type Pod struct {
 	OwnerKind   string           `logfield:"pod-owner-kind"`
 	OwnerName   string           `logfield:"pod-owner-name"`
 	OwnerReady  OwnerReadyReason `logfield:",squash"`
-	Ready       bool             `logfield:"pod-ready"`
 	CreatedTime time.Time        `logfield:"pod-created-time"`
 }
 
@@ -122,14 +120,6 @@ func (c *client) List(ctx context.Context) []Pod {
 			AppInstance:  labels["app.kubernetes.io/instance"],
 			AppVersion:   labels["app.kubernetes.io/version"],
 			AppComponent: labels["app.kubernetes.io/component"],
-		}
-
-		pod.Ready = true
-		for _, condition := range obj.Status.Conditions {
-			if condition.Status != v1.ConditionTrue {
-				pod.Ready = false
-				break
-			}
 		}
 
 		owner, ownerReady := c.getOwner(ctx, obj)

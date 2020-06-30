@@ -53,7 +53,6 @@
               <th>Instance ID</th>
               <th>Node Name</th>
               <th>Pod Name</th>
-              <th>Ready</th>
               <th>Can Decement</th>
               <th>Properties</th>
             </tr>
@@ -65,13 +64,6 @@
                 <td>{{ .NodeName }}</td>
                 <td>{{ .Name}}</td>
                 <td>
-                  {{ if .Ready}}
-                        <span class="badge badge-success">Ready</span>
-                  {{ else }}
-                        <span class="badge badge-warning">Unready</span>
-                  {{ end }}
-                </td>
-                <td>
                   {{ if eq .OwnerReady.Short "UnknownKind" }}
                     <span class="badge badge-warning" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
                   {{ else if .OwnerReady.CanDecrement }}
@@ -81,9 +73,6 @@
                   {{ end }}
                 </td>
                 <td>
-                  {{ if ne .Pod.OwnerKind "" }}
-                    <span class="badge badge-info" title="{{ .Pod.OwnerName }}">{{ .Pod.OwnerKind }}</span>
-                  {{ end }}
                   {{ if .Instance.WantsShutdown }}
                     <span class="badge badge-warning">Node Wants Shutdown</span>
                   {{ end }}
@@ -309,7 +298,6 @@
               <th>Pod Name</th>
               <th>Namespace</th>
               <th>Created Time</th>
-              <th>Ready</th>
               <th>Can Decement</th>
               <th>Owner</th>
             </tr>
@@ -321,13 +309,6 @@
                 <td>{{ .Name }}</td>
                 <td>{{ .Namespace }}</td>
                 <td>{{ PrettyTime .CreatedTime }}</td>
-                <td>
-                  {{ if .Ready}}
-                        <span class="badge badge-success">Ready</span>
-                  {{ else }}
-                        <span class="badge badge-warning">Unready</span>
-                  {{ end }}
-                </td>
                 <td>
                   {{ if eq .OwnerReady.Short "UnknownKind" }}
                     <span class="badge badge-warning" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>

@@ -8,6 +8,8 @@ func HasEC2Data(i *Instance) bool { return i.HasEC2Data() }
 
 func WantsShutdown(i *Instance) bool { return i.WantsShutdown() }
 
+func PendingLifecycleCompletion(i *Instance) bool { return i.PendingLifecycleCompletion() }
+
 func HasLifecycleMessage(i *Instance) bool { return i.HasLifecycleMessage() }
 
 func HasEC2State(states ...string) Selector {

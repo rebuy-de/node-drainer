@@ -9,22 +9,20 @@ import (
 )
 
 func TestSortPodByNeedsEviction(t *testing.T) {
-	podsWithEvictionNeeded := collectors.Pod{
+	podsWithEvictionNotNeeded := collectors.Pod{
 		Instance: collectors.Instance{
 			InstanceID: "xxx",
 			EC2: ec2.Instance{
 				InstanceID: "xxx",
 				State:      "running",
 			},
-			ASG: asg.Instance{
-				ID:        "xxx",
-				Completed: false,
-			},
 		},
 	}
 
-	podsWithEvictionNotNeeded := podsWithEvictionNeeded
-	podsWithEvictionNotNeeded.Instance.ASG.Completed = true
+	podsWithEvictionNeeded := podsWithEvictionNotNeeded
+	podsWithEvictionNeeded.Instance.ASG = asg.Instance{
+		ID: "xxx",
+	}
 
 	if !podsWithEvictionNeeded.WantsShutdown() {
 		t.Fatal("sanity check failed. pods should want shutdown")

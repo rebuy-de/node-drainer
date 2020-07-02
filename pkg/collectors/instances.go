@@ -30,7 +30,11 @@ func (i *Instance) HasASGData() bool {
 }
 
 func (i *Instance) WantsShutdown() bool {
-	return i.HasASGData() && i.HasEC2Data() && i.EC2.IsRunning() && i.ASG.Completed == false
+	return i.HasASGData() && i.HasEC2Data() && i.EC2.IsRunning()
+}
+
+func (i *Instance) PendingLifecycleCompletion() bool {
+	return i.HasASGData() && i.ASG.Deleted == true
 }
 
 func (i *Instance) HasLifecycleMessage() bool {
@@ -45,6 +49,26 @@ func (i *Instance) HasEC2State(states ...string) bool {
 	}
 
 	return false
+}
+
+type InstancePodStats struct {
+	Total            int
+	ImmuneToEviction int
+	CannotDecrement  int
+	CanDecrement     int
+}
+
+func (instance Instance) PodStats() InstancePodStats {
+	all := instance.Pods
+	immune, other := all.Split(PodImmuneToEviction)
+	can, cannot := other.Split(PodCanDecrement)
+
+	return InstancePodStats{
+		Total:            len(all),
+		ImmuneToEviction: len(immune),
+		CannotDecrement:  len(cannot),
+		CanDecrement:     len(can),
+	}
 }
 
 // Instances is a collection of Instance types with some additional functions.
@@ -91,24 +115,4 @@ func (instances Instances) Filter(selector Selector) Instances {
 		}
 	}
 	return result
-}
-
-type InstancePodStats struct {
-	Total            int
-	ImmuneToEviction int
-	CannotDecrement  int
-	CanDecrement     int
-}
-
-func (instance Instance) PodStats() InstancePodStats {
-	all := instance.Pods
-	immune, other := all.Split(PodImmuneToEviction)
-	can, cannot := other.Split(PodCanDecrement)
-
-	return InstancePodStats{
-		Total:            len(all),
-		ImmuneToEviction: len(immune),
-		CannotDecrement:  len(cannot),
-		CanDecrement:     len(can),
-	}
 }

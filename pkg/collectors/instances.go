@@ -17,6 +17,8 @@ type Instance struct {
 	EC2  ec2.Instance  `logfield:",squash"`
 	Spot spot.Instance `logfield:",squash"`
 	Node node.Node     `logfield:",squash"`
+
+	Pods Pods `logfield:"-"`
 }
 
 func (i *Instance) HasEC2Data() bool {
@@ -89,4 +91,24 @@ func (instances Instances) Filter(selector Selector) Instances {
 		}
 	}
 	return result
+}
+
+type InstancePodStats struct {
+	Total            int
+	ImmuneToEviction int
+	CannotDecrement  int
+	CanDecrement     int
+}
+
+func (instance Instance) PodStats() InstancePodStats {
+	all := instance.Pods
+	immune, other := all.Split(PodImmuneToEviction)
+	can, cannot := other.Split(PodCanDecrement)
+
+	return InstancePodStats{
+		Total:            len(all),
+		ImmuneToEviction: len(immune),
+		CannotDecrement:  len(cannot),
+		CanDecrement:     len(can),
+	}
 }

@@ -24,6 +24,10 @@
             top: -6.5em;
             visibility: hidden;
         }
+
+        .badge-stats {
+            min-width: 2.5em;
+        }
     </style>
   </head>
   <body class="mb-4 ml-3 mr-3">
@@ -101,6 +105,7 @@
               <th>Launch Time</th>
               <th>Triggered At</th>
               <th>Termination Time</th>
+              <th>Pods</th>
               <th>Properties</th>
             </tr>
           </thead>
@@ -127,8 +132,20 @@
                 <td>{{ PrettyTime .ASG.TriggeredAt }}</td>
                 <td>{{ PrettyTime .EC2.TerminationTime }}</td>
                 <td>
+                    {{ $podStats := .PodStats }}
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">{{ $podStats.Total }}</span>
+                    {{ if ne $podStats.Total 0 }}
+                        ⇨
+                        <span class="badge badge-pill badge-stats badge-primary" title="Immune To Eviction">{{ $podStats.ImmuneToEviction }}</span>
+                        {{ if ne $podStats.CannotDecrement 0 }}
+                            <span class="badge badge-pill badge-stats badge-warning" title="Cannot Decrement">{{ $podStats.CannotDecrement }}</span>
+                        {{ end }}
+                        <span class="badge badge-pill badge-stats badge-success" title="Can Decrement">{{ $podStats.CanDecrement }}</span>
+                    {{ end }}
+                </td>
+                <td>
                     {{ if .WantsShutdown }}
-                        <span class="badge badge-warning">WantsShutdown</span>
+                        <span class="badge badge-pill badge-warning">WantsShutdown</span>
                     {{ end }}
                     {{ template "pretty_node_taints" .Node.Taints }}
                 </td>
@@ -152,7 +169,7 @@
             </tr>
           </thead>
           <tbody>
-            {{ range .SpotInstances }}
+            {{ range .Lists.Spot }}
               <tr>
                 <td>{{ .InstanceID }}</td>
                 <td>{{ .RequestID }}</td>
@@ -187,7 +204,7 @@
             </tr>
           </thead>
           <tbody>
-            {{ range .ASGInstances }}
+            {{ range .Lists.ASG }}
               <tr>
                 <td>{{ .ID }}</td>
                 <td>{{ PrettyTime .TriggeredAt }}</td>
@@ -223,7 +240,7 @@
             </tr>
           </thead>
           <tbody>
-            {{ range .Nodes }}
+            {{ range .Lists.Nodes }}
               <tr>
                 <td>{{ .InstanceID }}</td>
                 <td>{{ .NodeName }}</td>
@@ -260,7 +277,7 @@
             </tr>
           </thead>
           <tbody>
-            {{ range .EC2Instances }}
+            {{ range .Lists.EC2 }}
               <tr>
                 <td>{{ .InstanceID }}</td>
                 <td>{{ .NodeName }}</td>
@@ -303,7 +320,7 @@
             </tr>
           </thead>
           <tbody>
-            {{ range .Pods }}
+            {{ range .Lists.Pods }}
               <tr>
                 <td>{{ .NodeName }}</td>
                 <td>{{ .Name }}</td>

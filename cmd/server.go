@@ -16,11 +16,6 @@ import (
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/webutil"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 )
 
 // Healthier is a simple interface, that can easily be implemented by all
@@ -62,11 +57,7 @@ func (h HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Server is the HTTP server, which is used for the status page, metrics and
 // healthyness.
 type Server struct {
-	asg   asg.Client
-	ec2   ec2.Client
-	spot  spot.Client
-	nodes node.Client
-	pods  pod.Client
+	collectors collectors.Collectors
 
 	mainloop *MainLoop
 }
@@ -75,11 +66,11 @@ type Server struct {
 func (s *Server) Run(ctx context.Context) error {
 	h := HealthHandler{
 		services: map[string]Healthier{
-			"ec2":   s.ec2,
-			"asg":   s.asg,
-			"spot":  s.spot,
-			"nodes": s.nodes,
-			"pods":  s.pods,
+			"ec2":   s.collectors.EC2,
+			"asg":   s.collectors.ASG,
+			"spot":  s.collectors.Spot,
+			"nodes": s.collectors.Node,
+			"pods":  s.collectors.Pod,
 
 			"mainloop": s.mainloop,
 		},
@@ -97,34 +88,23 @@ func (s *Server) Run(ctx context.Context) error {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	data := struct {
-		ASGInstances  []asg.Instance
-		EC2Instances  []ec2.Instance
-		SpotInstances []spot.Instance
-		Nodes         []node.Node
-		Pods          []pod.Pod
-
+		Lists             collectors.Lists
 		CombinedInstances collectors.Instances
 		CombinedPods      collectors.Pods
 	}{}
 
-	data.ASGInstances = s.asg.List()
-	data.EC2Instances = s.ec2.List()
-	data.SpotInstances = s.spot.List()
-	data.Nodes = s.nodes.List()
-	data.Pods = s.pods.List(r.Context())
+	data.Lists = s.collectors.List(r.Context())
 
-	instances := collectors.CombineInstances(
-		data.ASGInstances, data.EC2Instances, data.SpotInstances, data.Nodes,
-	).
+	instances, pods := collectors.Combine(data.Lists)
+
+	data.CombinedInstances = instances.
 		Sort(collectors.ByInstanceID).
 		Sort(collectors.ByLaunchTime).
 		Sort(collectors.ByEC2State).
-		SortReverse(collectors.ByTriggeredAt)
-
-	data.CombinedInstances = instances.
+		SortReverse(collectors.ByTriggeredAt).
 		Select(collectors.HasEC2Data)
 
-	data.CombinedPods = collectors.CombinePods(instances, data.Pods).
+	data.CombinedPods = pods.
 		Sort(collectors.PodsByNeedsEviction)
 
 	s.respondTemplate(w, r, "status.html", data)

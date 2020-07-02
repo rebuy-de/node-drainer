@@ -6,11 +6,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 )
@@ -25,31 +20,24 @@ type MainLoop struct {
 
 	failureCount int
 
-	asg   asg.Client
-	ec2   ec2.Client
-	spot  spot.Client
-	nodes node.Client
-	pods  pod.Client
+	collectors collectors.Collectors
 }
 
 // NewMainLoop initializes a MainLoop.
-func NewMainLoop(asgClient asg.Client, ec2Client ec2.Client, spotClient spot.Client,
-	nodeClient node.Client, podClient pod.Client) *MainLoop {
+func NewMainLoop(collectors collectors.Collectors) *MainLoop {
 	ml := new(MainLoop)
 
 	ml.stateCache = map[string]string{}
-	ml.asg = asgClient
-	ml.ec2 = ec2Client
-	ml.spot = spotClient
-	ml.nodes = nodeClient
-	ml.pods = podClient
+	ml.collectors = collectors
 	ml.triggerLoop = new(syncutil.SignalEmitter)
 
 	ml.signaler = syncutil.SignalerFromEmitters(
 		ml.triggerLoop,
-		asgClient.SignalEmitter(),
-		ec2Client.SignalEmitter(),
-		spotClient.SignalEmitter(),
+		ml.collectors.EC2.SignalEmitter(),
+		ml.collectors.ASG.SignalEmitter(),
+		ml.collectors.Spot.SignalEmitter(),
+		//ml.collectors.Node.SignalEmitter(),
+		//ml.collectors.Pod.SignalEmitter(),
 	)
 
 	return ml
@@ -66,7 +54,7 @@ func (l *MainLoop) Run(ctx context.Context) error {
 
 	logutil.Get(ctx).Debug("waiting for EC2 cache to warm up")
 	for ctx.Err() == nil {
-		if len(l.ec2.List()) > 0 {
+		if len(l.collectors.EC2.List()) > 0 {
 			break
 		}
 
@@ -97,20 +85,17 @@ func (l *MainLoop) Run(ctx context.Context) error {
 func (l *MainLoop) runOnce(ctx context.Context) error {
 	ctx = logutil.Start(ctx, "loop")
 
-	combined := collectors.CombineInstances(
-		l.asg.List(),
-		l.ec2.List(),
-		l.spot.List(),
-		l.nodes.List(),
-	).Sort(collectors.ByLaunchTime).SortReverse(collectors.ByTriggeredAt)
+	instances, _ := collectors.Combine(l.collectors.List(ctx))
+	instances = instances.
+		Sort(collectors.ByLaunchTime).SortReverse(collectors.ByTriggeredAt)
 
-	InstMainLoopStarted(ctx, combined)
+	InstMainLoopStarted(ctx, instances)
 
 	// Mark all instances as complete immediately.
-	for _, instance := range combined.Select(collectors.WantsShutdown) {
+	for _, instance := range instances.Select(collectors.WantsShutdown) {
 		InstMainLoopCompletingInstance(ctx, instance)
 
-		err := l.asg.Complete(ctx, instance.InstanceID)
+		err := l.collectors.ASG.Complete(ctx, instance.InstanceID)
 		if err != nil {
 			return errors.Wrap(err, "failed to mark node as complete")
 		}
@@ -120,7 +105,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 	}
 
 	// Tell instrumentation that an instance state changed.
-	for _, instance := range combined {
+	for _, instance := range instances {
 		currState := instance.EC2.State
 		prevState := l.stateCache[instance.InstanceID]
 
@@ -140,7 +125,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 	}
 
 	// Clean up old messages
-	for _, instance := range combined.Filter(collectors.HasEC2Data).Select(collectors.HasLifecycleMessage) {
+	for _, instance := range instances.Filter(collectors.HasEC2Data).Select(collectors.HasLifecycleMessage) {
 		InstMainLoopDeletingLifecycleMessage(ctx, instance)
 
 		age := time.Since(instance.ASG.TriggeredAt)
@@ -150,7 +135,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 			continue
 		}
 
-		err := l.asg.Delete(ctx, instance.InstanceID)
+		err := l.collectors.ASG.Delete(ctx, instance.InstanceID)
 		if err != nil {
 			return errors.Wrap(err, "failed to delete message")
 		}

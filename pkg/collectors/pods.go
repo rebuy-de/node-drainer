@@ -57,3 +57,20 @@ func (pods Pods) SortReverse(by PodsBy) Pods {
 
 	return pods
 }
+
+func (pods Pods) Split(selector PodSelector) (Pods, Pods) {
+	var (
+		yay = Pods{}
+		ney = Pods{}
+	)
+
+	for _, p := range pods {
+		if selector(&p) {
+			yay = append(yay, p)
+		} else {
+			ney = append(ney, p)
+		}
+	}
+
+	return yay, ney
+}

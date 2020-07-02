@@ -144,10 +144,10 @@
                     {{ end }}
                 </td>
                 <td>
-                    {{ if .WantsShutdown }}
-                        <span class="badge badge-pill badge-warning">WantsShutdown</span>
-                    {{ end }}
                     {{ template "pretty_node_taints" .Node.Taints }}
+                    {{ if .WantsShutdown }}
+                        <span class="badge badge-warning">WantsShutdown</span>
+                    {{ end }}
                 </td>
               </tr>
             {{ end }}

@@ -16,6 +16,10 @@ func (p *Pod) NeedsEviction() bool {
 		return false
 	}
 
+	if p.Pod.ImmuneToEviction() {
+		return false
+	}
+
 	return p.Instance.WantsShutdown()
 }
 

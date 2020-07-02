@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
@@ -50,40 +51,38 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	kubeInterface, err := r.kube.Client()
 	cmdutil.Must(err)
 
-	asgClient, err := asg.New(awsSession, r.sqsQueue)
+	collectors := collectors.Collectors{
+		EC2:  ec2.New(awsSession, 1*time.Second),
+		Spot: spot.New(awsSession, 1*time.Second),
+		Node: node.New(kubeInterface),
+		Pod:  pod.New(kubeInterface),
+	}
+
+	collectors.ASG, err = asg.New(awsSession, r.sqsQueue)
 	cmdutil.Must(err)
 
-	ec2Client := ec2.New(awsSession, 1*time.Second)
-	spotClient := spot.New(awsSession, 1*time.Second)
-	nodeClient := node.New(kubeInterface)
-	podClient := pod.New(kubeInterface)
-
-	mainLoop := NewMainLoop(asgClient, ec2Client, spotClient, nodeClient, podClient)
+	mainLoop := NewMainLoop(collectors)
 
 	server := &Server{
-		ec2:      ec2Client,
-		asg:      asgClient,
-		spot:     spotClient,
-		nodes:    nodeClient,
-		pods:     podClient,
-		mainloop: mainLoop,
+		collectors: collectors,
+		mainloop:   mainLoop,
 	}
 
 	egrp, ctx := errgroup.WithContext(ctx)
 	egrp.Go(func() error {
-		return errors.Wrap(ec2Client.Run(ctx), "failed to run ec2 watch client")
+		return errors.Wrap(collectors.EC2.Run(ctx), "failed to run ec2 watch client")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(spotClient.Run(ctx), "failed to run spot watch client")
+		return errors.Wrap(collectors.Spot.Run(ctx), "failed to run spot watch client")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(asgClient.Run(ctx), "failed to run ASG Lifecycle client")
+		return errors.Wrap(collectors.ASG.Run(ctx), "failed to run ASG Lifecycle client")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(nodeClient.Run(ctx), "failed to run Kubernetes node client")
+		return errors.Wrap(collectors.Node.Run(ctx), "failed to run Kubernetes node client")
 	})
 	egrp.Go(func() error {
-		return errors.Wrap(podClient.Run(ctx), "failed to run Kubernetes node client")
+		return errors.Wrap(collectors.Pod.Run(ctx), "failed to run Kubernetes pod client")
 	})
 	egrp.Go(func() error {
 		return errors.Wrap(server.Run(ctx), "failed to run HTTP server")

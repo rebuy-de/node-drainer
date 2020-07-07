@@ -87,13 +87,18 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	lists := s.collectors.List(r.Context())
+	s.renderStatus(w, r, lists)
+}
+
+func (s *Server) renderStatus(w http.ResponseWriter, r *http.Request, lists collectors.Lists) {
 	data := struct {
 		Lists             collectors.Lists
 		CombinedInstances collectors.Instances
 		CombinedPods      collectors.Pods
 	}{}
 
-	data.Lists = s.collectors.List(r.Context())
+	data.Lists = lists
 
 	instances, pods := collectors.Combine(data.Lists)
 

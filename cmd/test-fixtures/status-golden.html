@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+
+    <title>NodeDrainer</title>
+
+    <style>
+        table.table-wide {
+            width: auto !important;
+        }
+
+        table.table-wide td, table.table-wide th {
+            white-space: nowrap;
+        }
+
+        a.anchor {
+            display: block;
+            position: relative;
+            top: -6.5em;
+            visibility: hidden;
+        }
+
+        .badge-stats {
+            min-width: 2.5em;
+        }
+    </style>
+  </head>
+  <body class="mb-4 ml-3 mr-3">
+    <nav class="navbar fixed-top navbar-expand navbar-dark bg-dark">
+      <a class="navbar-brand" href="">NodeDrainer</a>
+
+      <ul class="navbar-nav mr-auto">
+        <li class="nav-item"><a class="nav-link" href="#combined-pods">Combined Pods</a></li>
+        <li class="nav-item"><a class="nav-link" href="#combined-instances">Combined Instances</a></li>
+        <li class="nav-item"><a class="nav-link" href="#spot-requests">Spot Requests</a></li>
+        <li class="nav-item"><a class="nav-link" href="#asg-lifecycle">ASG Lifecycle</a></li>
+        <li class="nav-item"><a class="nav-link" href="#kubernetes-nodes">Kubernetes Nodes</a></li>
+        <li class="nav-item"><a class="nav-link" href="#ec2">EC2</a></li>
+        <li class="nav-item"><a class="nav-link" href="#pods">Pods</a></li>
+      </ul>
+    </nav>
+
+    <div class="container-flex" style="margin-top:5em;">
+        <h1>Status Page</h1>
+
+        <h3>Combined Pods</h3>
+        <a class="anchor" id="combined-pods"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Node Name</th>
+              <th>Pod Name</th>
+              <th>Can Decement</th>
+              <th>Properties</th>
+            </tr>
+          </thead>
+          <tbody>
+              
+          </tbody>
+        </table>
+
+        <h3>Combined Instances</h3>
+        <a class="anchor" id="combined-instances"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Host Name</th>
+              <th>Instance Name</th>
+              <th>State</th>
+              <th>Launch Time</th>
+              <th>Triggered At</th>
+              <th>Termination Time</th>
+              <th>Pods</th>
+              <th>Properties</th>
+            </tr>
+          </thead>
+          <tbody>
+              
+              <tr>
+                <td>i-8619166b000000005</td>
+                <td>ip-10-93-23-6.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Mon, 13 Jul 17:12:37</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+              <tr>
+                <td>i-98456052000000006</td>
+                <td>ip-10-206-186-7.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Sun, 12 Jul 16:00:03</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+              <tr>
+                <td>i-8b4dc795000000007</td>
+                <td>ip-10-237-188-8.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Sun, 12 Jul 10:51:07</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+              <tr>
+                <td>i-4b0988fe000000004</td>
+                <td>ip-10-105-46-5.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Sat, 11 Jul 19:37:14</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+              <tr>
+                <td>i-9acb0442000000000</td>
+                <td>ip-10-47-51-1.eu-west-1.compute.internal</td>
+                <td>stateful</td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Mon, 13 Jul 17:21:54</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+              <tr>
+                <td>i-10cd9672000000001</td>
+                <td>ip-10-239-48-2.eu-west-1.compute.internal</td>
+                <td>stateful</td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Fri, 10 Jul 09:03:40</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+              <tr>
+                <td>i-36d9ff45000000002</td>
+                <td>ip-10-192-56-3.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Wed, 8 Jul 08:01:59</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+              <tr>
+                <td>i-add87e4a000000003</td>
+                <td>ip-10-32-11-4.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Tue, 7 Jul 02:15:53</td>
+                <td>N/A</td>
+                <td>N/A</td>
+                <td>
+                    
+                    <span class="badge badge-pill badge-stats badge-dark" title="Total">0</span>
+                    
+                </td>
+                <td>
+                    
+  
+
+                    
+                </td>
+              </tr>
+            
+          </tbody>
+        </table>
+
+        <h3>Spot Requests</h3>
+        <a class="anchor" id="spot-requests"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Request ID</th>
+              <th>Create Time</th>
+              <th>State</th>
+              <th>Status Code</th>
+              <th>Status Update Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+          </tbody>
+        </table>
+
+
+        <h3>ASG Lifecycle</h3>
+        <a class="anchor" id="asg-lifecycle"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Triggered</th>
+              <th>Completed</th>
+              <th>Deleted</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+          </tbody>
+        </table>
+
+        <h3>Kubernetes Nodes</h3>
+        <a class="anchor" id="kubernetes-nodes"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Node Name</th>
+              <th>Schedulable</th>
+              <th>Taints</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+          </tbody>
+        </table>
+
+        <h3>EC2</h3>
+        <a class="anchor" id="ec2"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Instance ID</th>
+              <th>Node Name</th>
+              <th>Instance Name</th>
+              <th>Type</th>
+              <th>AZ</th>
+              <th>Lifecycle</th>
+              <th>State</th>
+              <th>Launch Time</th>
+              <th>Termination Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+              <tr>
+                <td>i-9acb0442000000000</td>
+                <td>ip-10-47-51-1.eu-west-1.compute.internal</td>
+                <td>stateful</td>
+                <td>m5.2xlarge</td>
+                <td>eu-west-1a</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Mon, 13 Jul 17:21:54</td>
+                <td>N/A</td>
+              </tr>
+            
+              <tr>
+                <td>i-10cd9672000000001</td>
+                <td>ip-10-239-48-2.eu-west-1.compute.internal</td>
+                <td>stateful</td>
+                <td>m5.2xlarge</td>
+                <td>eu-west-1c</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Fri, 10 Jul 09:03:40</td>
+                <td>N/A</td>
+              </tr>
+            
+              <tr>
+                <td>i-36d9ff45000000002</td>
+                <td>ip-10-192-56-3.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>m5.2xlarge</td>
+                <td>eu-west-1c</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Wed, 8 Jul 08:01:59</td>
+                <td>N/A</td>
+              </tr>
+            
+              <tr>
+                <td>i-add87e4a000000003</td>
+                <td>ip-10-32-11-4.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>m4.2xlarge</td>
+                <td>eu-west-1c</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-success">Running</span>
+                    
+                </td>
+                <td>Tue, 7 Jul 02:15:53</td>
+                <td>N/A</td>
+              </tr>
+            
+              <tr>
+                <td>i-4b0988fe000000004</td>
+                <td>ip-10-105-46-5.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>m4.2xlarge</td>
+                <td>eu-west-1a</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Sat, 11 Jul 19:37:14</td>
+                <td>N/A</td>
+              </tr>
+            
+              <tr>
+                <td>i-8619166b000000005</td>
+                <td>ip-10-93-23-6.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>m5.2xlarge</td>
+                <td>eu-west-1a</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Mon, 13 Jul 17:12:37</td>
+                <td>N/A</td>
+              </tr>
+            
+              <tr>
+                <td>i-98456052000000006</td>
+                <td>ip-10-206-186-7.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>m4.2xlarge</td>
+                <td>eu-west-1a</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Sun, 12 Jul 16:00:03</td>
+                <td>N/A</td>
+              </tr>
+            
+              <tr>
+                <td>i-8b4dc795000000007</td>
+                <td>ip-10-237-188-8.eu-west-1.compute.internal</td>
+                <td>stateless</td>
+                <td>m5.2xlarge</td>
+                <td>eu-west-1a</td>
+                <td></td>
+                <td>
+                    
+                        <span class="badge badge-danger">Terminated</span>
+                    
+                </td>
+                <td>Sun, 12 Jul 10:51:07</td>
+                <td>N/A</td>
+              </tr>
+            
+          </tbody>
+        </table>
+
+        <h3>Pods</h3>
+        <a class="anchor" id="pods"></a>
+
+        <table class="table table-hover table-sm table-wide">
+          <thead>
+            <tr>
+              <th>Node Name</th>
+              <th>Pod Name</th>
+              <th>Namespace</th>
+              <th>Created Time</th>
+              <th>Can Decement</th>
+              <th>Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+          </tbody>
+        </table>
+    </div>
+  </body>
+</html>

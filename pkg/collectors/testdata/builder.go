@@ -15,9 +15,11 @@ import (
 type EC2State string
 
 const (
-	EC2Missing    EC2State = ""
-	EC2Running    EC2State = "running"
-	EC2Terminated EC2State = "terminated"
+	EC2Missing      EC2State = ""
+	EC2Pending      EC2State = "pending"
+	EC2Running      EC2State = "running"
+	EC2ShuttingDown EC2State = "shutting-down"
+	EC2Terminated   EC2State = "terminated"
 )
 
 type SpotState string
@@ -114,10 +116,13 @@ func (b *Builder) Build() collectors.Lists {
 				ec2.InstanceLifecycle = "spot"
 			}
 
-			switch template.EC2 {
-			case EC2Terminated:
+			if template.EC2 == EC2ShuttingDown || template.EC2 == EC2Terminated {
 				terminationTime := ec2.LaunchTime.Add(time.Hour)
 				ec2.TerminationTime = &terminationTime
+			}
+
+			if template.EC2 == EC2Running || template.EC2 == EC2ShuttingDown {
+				ec2.NodeName = nodeName
 			}
 
 			result.EC2 = append(result.EC2, ec2)
@@ -147,6 +152,14 @@ func (b *Builder) Build() collectors.Lists {
 		if template.Node != NodeMissing {
 			node.InstanceID = instanceID
 			node.NodeName = nodeName
+
+			if template.Name != "stateful" {
+				node.Taints = append(node.Taints, v1.Taint{
+					Key:    "rebuy.com/pool",
+					Value:  template.Name,
+					Effect: "NoSchedule",
+				})
+			}
 
 			if template.Node == NodeUnschedulable {
 				node.Unschedulable = true

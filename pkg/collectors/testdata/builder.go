@@ -7,6 +7,7 @@ import (
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 )
 
 type EC2State string
@@ -66,11 +67,11 @@ func (b *Builder) Build() collectors.Lists {
 		// InstanceID consisting of two parts a random one and the actual order
 		// number. This is just to make the IDs look more real and "unsorted"
 		// while still being able to identify them.
-		instanceID := fmt.Sprintf("i-%08x0%08d", b.rand.Uint32(), i)
+		instanceID := fmt.Sprintf("i-%08x0%08d", b.rand.Uint32(), i+1)
 
 		var (
-			ec2 ec2.Instance
-			//spot spot.Instance
+			ec2  ec2.Instance
+			spot spot.Instance
 		)
 
 		if template.EC2 != EC2Missing {
@@ -95,7 +96,38 @@ func (b *Builder) Build() collectors.Lists {
 				b.rand.Uint32()%0xff, b.rand.Uint32()%0xff, i+1,
 			)
 
+			if template.Spot != SpotMissing {
+				ec2.InstanceLifecycle = "spot"
+			}
+
+			switch template.EC2 {
+			case EC2Terminated:
+				terminationTime := ec2.LaunchTime.Add(time.Hour)
+				ec2.TerminationTime = &terminationTime
+			}
+
 			result.EC2 = append(result.EC2, ec2)
+		}
+
+		if template.Spot != SpotMissing {
+			spot.InstanceID = instanceID
+
+			spot.RequestID = fmt.Sprintf("sir-%08x", b.rand.Uint32())
+			spot.CreateTime = ec2.LaunchTime
+			spot.StatusUpdateTime = ec2.LaunchTime
+
+			switch template.Spot {
+			case SpotRunning:
+				spot.State = "active"
+				spot.StatusCode = "fulfilled"
+			case SpotTerminatedByUser:
+				spot.State = "closed"
+				spot.StatusCode = "instance-terminated-by-user"
+
+			}
+
+			result.Spot = append(result.Spot, spot)
+
 		}
 
 	}

@@ -14,6 +14,14 @@ func Default() collectors.Lists {
 	b.Add(2, Template{
 		EC2:  EC2Running,
 		Spot: SpotRunning,
+		Node: NodeUnschedulable,
+		Name: "stateless",
+	})
+
+	b.Add(2, Template{
+		EC2:  EC2Running,
+		Spot: SpotRunning,
+		Node: NodeSchedulable,
 		Name: "stateless",
 	})
 

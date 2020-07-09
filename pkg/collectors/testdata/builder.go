@@ -8,6 +8,8 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
+	v1 "k8s.io/api/core/v1"
 )
 
 type EC2State string
@@ -26,10 +28,19 @@ const (
 	SpotTerminatedByUser SpotState = "terminated-by-user"
 )
 
+type NodeState string
+
+const (
+	NodeMissing       NodeState = ""
+	NodeSchedulable   NodeState = "schedulable"
+	NodeUnschedulable NodeState = "unschedulable"
+)
+
 type Template struct {
 	Name string
 	EC2  EC2State
 	Spot SpotState
+	Node NodeState
 }
 
 type Builder struct {
@@ -69,13 +80,21 @@ func (b *Builder) Build() collectors.Lists {
 		// while still being able to identify them.
 		instanceID := fmt.Sprintf("i-%08x0%08d", b.rand.Uint32(), i+1)
 
+		// Same idea as with the Instance ID.
+		nodeName := fmt.Sprintf(
+			"ip-10-%d-%d-%d.eu-west-1.compute.internal",
+			b.rand.Uint32()%0xff, b.rand.Uint32()%0xff, i+1,
+		)
+
 		var (
 			ec2  ec2.Instance
 			spot spot.Instance
+			node node.Node
 		)
 
 		if template.EC2 != EC2Missing {
 			ec2.InstanceID = instanceID
+			ec2.NodeName = nodeName
 			ec2.InstanceName = template.Name
 			ec2.State = string(template.EC2)
 			ec2.LaunchTime = b.randTime()
@@ -91,11 +110,6 @@ func (b *Builder) Build() collectors.Lists {
 			)
 
 			// Same idea as with the Instance ID.
-			ec2.NodeName = fmt.Sprintf(
-				"ip-10-%d-%d-%d.eu-west-1.compute.internal",
-				b.rand.Uint32()%0xff, b.rand.Uint32()%0xff, i+1,
-			)
-
 			if template.Spot != SpotMissing {
 				ec2.InstanceLifecycle = "spot"
 			}
@@ -128,6 +142,23 @@ func (b *Builder) Build() collectors.Lists {
 
 			result.Spot = append(result.Spot, spot)
 
+		}
+
+		if template.Node != NodeMissing {
+			node.InstanceID = instanceID
+			node.NodeName = nodeName
+
+			if template.Node == NodeUnschedulable {
+				node.Unschedulable = true
+
+				node.Taints = append(node.Taints, v1.Taint{
+					Key:    "node.kubernetes.io/unschedulable",
+					Effect: "NoSchedule",
+				})
+
+			}
+
+			result.Nodes = append(result.Nodes, node)
 		}
 
 	}

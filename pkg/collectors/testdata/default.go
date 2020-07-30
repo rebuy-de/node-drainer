@@ -83,5 +83,29 @@ func Default() collectors.Lists {
 		UnreadyReplicas: 0,
 	})
 
+	b.AddWorkload(PodTemplate{
+		Owner: OwnerStatefulSet,
+		Name:  "database",
+
+		TotalReplicas:   3,
+		UnreadyReplicas: 0,
+	})
+
+	b.AddWorkload(PodTemplate{
+		Owner: OwnerDeployment,
+		Name:  "frontend",
+
+		TotalReplicas:   3,
+		UnreadyReplicas: 1,
+	})
+
+	b.AddWorkload(PodTemplate{
+		Owner: OwnerDeployment,
+		Name:  "backend",
+
+		TotalReplicas:   10,
+		UnreadyReplicas: 0,
+	})
+
 	return b.Build()
 }

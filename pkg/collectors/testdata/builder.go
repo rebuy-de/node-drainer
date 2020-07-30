@@ -251,12 +251,14 @@ func (b *Builder) buildPods(result collectors.Lists) collectors.Lists {
 		}
 
 		nodePerm := b.rand.Perm(int(specReplicas))
+		prefix := b.rand.Intn(0xffffffffff)
 
 		for j := int32(0); j < specReplicas; j++ {
 			replica := pod.Pod{}
 
 			node := result.Nodes[nodePerm[j]%nodeMax]
 			replica.NodeName = node.NodeName
+			replica.CreatedTime = b.randTime()
 
 			replica.Namespace = "default"
 			if template.Namespace != "" {
@@ -264,8 +266,20 @@ func (b *Builder) buildPods(result collectors.Lists) collectors.Lists {
 			}
 
 			switch template.Owner {
+			case OwnerDeployment:
+				replica.Name = fmt.Sprintf("%s-%010x-%05x", template.Name,
+					prefix, b.rand.Intn(0xfffff))
+
+			case OwnerJob:
+				fallthrough
+			case OwnerDaemonSet:
+				replica.Name = fmt.Sprintf("%s-%05x", template.Name, b.rand.Intn(0xfffff))
+
 			case OwnerNode:
 				replica.Name = fmt.Sprintf("%s-%s", template.Name, replica.NodeName)
+
+			case OwnerStatefulSet:
+				fallthrough
 			default:
 				replica.Name = fmt.Sprintf("%s-%d", template.Name, j)
 			}
@@ -273,6 +287,14 @@ func (b *Builder) buildPods(result collectors.Lists) collectors.Lists {
 			replica.OwnerKind = string(template.Owner)
 			if template.Owner != OwnerMissing {
 				replica.OwnerName = template.Name
+			}
+
+			ownerReady := pod.GetOwnerReadyStatic(replica.OwnerKind)
+			if ownerReady != nil {
+				replica.OwnerReady = *ownerReady
+			} else {
+				replica.OwnerReady = pod.GetOwnerReadyFromReplicas(
+					replica.OwnerKind, &specReplicas, specReplicas-template.UnreadyReplicas)
 			}
 
 			result.Pods = append(result.Pods, replica)

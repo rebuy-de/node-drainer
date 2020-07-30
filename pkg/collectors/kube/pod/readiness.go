@@ -19,11 +19,9 @@ type OwnerReadyReason struct {
 func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerReference, OwnerReadyReason) {
 	owner := meta_v1.GetControllerOf(pod)
 
-	if owner == nil {
-		return nil, OwnerReadyReason{
-			CanDecrement: true, Short: "NoOwner",
-			Reason: "Pods with no Owner are always allowed",
-		}
+	ownerKind := ""
+	if owner != nil {
+		ownerKind = owner.Kind
 	}
 
 	fnerr := func(err error, short string) OwnerReadyReason {
@@ -39,35 +37,14 @@ func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerRefer
 		return or
 	}
 
-	switch owner.Kind {
-	default:
-		logutil.Get(ctx).
-			WithError(errors.Errorf("unknown owner kind %s", owner.Kind)).
-			Error("failed to get owner readiness")
-		return owner, OwnerReadyReason{
-			CanDecrement: true, Short: "UnknownKind",
-			Reason: "Owner kind is unknown",
-		}
-
-	case "Node":
-		return owner, OwnerReadyReason{
-			CanDecrement: true, Short: "IsNodePod",
-			Reason: "Node Pods are always allowed",
-		}
-
-	case "DaemonSet":
-		return owner, OwnerReadyReason{
-			CanDecrement: true, Short: "IsDaemonSetPod",
-			Reason: "DaemonSet Pods are always allowed",
-		}
-
+	switch ownerKind {
 	case "StatefulSet":
 		sts, err := c.sts.Lister().StatefulSets(pod.ObjectMeta.Namespace).Get(owner.Name)
 		if err != nil {
 			return owner, fnerr(err, "StatefulSetGetError")
 		}
 
-		return owner, getOwnerReadyFromReplicas(owner.Kind,
+		return owner, GetOwnerReadyFromReplicas(owner.Kind,
 			sts.Spec.Replicas, sts.Status.ReadyReplicas)
 
 	case "ReplicaSet":
@@ -78,7 +55,7 @@ func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerRefer
 
 		parent := meta_v1.GetControllerOf(rs)
 		if parent == nil {
-			return owner, getOwnerReadyFromReplicas(owner.Kind,
+			return owner, GetOwnerReadyFromReplicas(owner.Kind,
 				rs.Spec.Replicas, rs.Status.AvailableReplicas)
 		}
 
@@ -87,19 +64,55 @@ func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerRefer
 			return parent, fnerr(err, "DeploymentGetError")
 		}
 
-		return parent, getOwnerReadyFromReplicas(parent.Kind,
+		return parent, GetOwnerReadyFromReplicas(parent.Kind,
 			deploy.Spec.Replicas, deploy.Status.AvailableReplicas)
 
-	case "Job":
-		return owner, OwnerReadyReason{
-			CanDecrement: true, Short: "IsJobPod",
-			Reason: "Job Pods are always allowed",
+	default:
+		reason := GetOwnerReadyStatic(ownerKind)
+		if reason == nil {
+			logutil.Get(ctx).
+				WithError(errors.Errorf("unknown owner kind %s", owner.Kind)).
+				Error("failed to get owner readiness")
+			return owner, OwnerReadyReason{
+				CanDecrement: true, Short: "UnknownKind",
+				Reason: "Owner kind is unknown",
+			}
 		}
 
+		return owner, *reason
 	}
 }
 
-func getOwnerReadyFromReplicas(kind string, specReplicas *int32, haveReplicas int32) OwnerReadyReason {
+func GetOwnerReadyStatic(kind string) *OwnerReadyReason {
+	switch kind {
+	case "":
+		return &OwnerReadyReason{
+			CanDecrement: true, Short: "NoOwner",
+			Reason: "Pods with no Owner are always allowed",
+		}
+	case "Node":
+		return &OwnerReadyReason{
+			CanDecrement: true, Short: "IsNodePod",
+			Reason: "Node Pods are always allowed",
+		}
+
+	case "DaemonSet":
+		return &OwnerReadyReason{
+			CanDecrement: true, Short: "IsDaemonSetPod",
+			Reason: "DaemonSet Pods are always allowed",
+		}
+
+	case "Job":
+		return &OwnerReadyReason{
+			CanDecrement: true, Short: "IsJobPod",
+			Reason: "Job Pods are always allowed",
+		}
+	}
+
+	return nil
+}
+
+func GetOwnerReadyFromReplicas(kind string, specReplicas *int32, haveReplicas int32) OwnerReadyReason {
 	wantReplicas := int32(1)
 	if specReplicas != nil {
 		wantReplicas = *specReplicas

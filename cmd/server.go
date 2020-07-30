@@ -102,15 +102,11 @@ func (s *Server) renderStatus(w http.ResponseWriter, r *http.Request, lists coll
 
 	instances, pods := collectors.Combine(data.Lists)
 
-	data.CombinedInstances = instances.
-		Sort(collectors.ByInstanceID).
-		Sort(collectors.ByLaunchTime).
-		Sort(collectors.ByEC2State).
-		SortReverse(collectors.ByTriggeredAt).
-		Select(collectors.HasEC2Data)
+	SortInstances(instances)
+	SortPods(pods)
 
-	data.CombinedPods = pods.
-		Sort(collectors.PodsByNeedsEviction)
+	data.CombinedInstances = instances.Select(collectors.HasEC2Data)
+	data.CombinedPods = pods
 
 	s.respondTemplate(w, r, "status.html", data)
 }

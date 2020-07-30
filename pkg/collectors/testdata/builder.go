@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
@@ -38,11 +39,22 @@ const (
 	NodeUnschedulable NodeState = "unschedulable"
 )
 
+type ASGState string
+
+const (
+	ASGMissing       ASGState = ""
+	ASGPending       ASGState = "pending"
+	ASGOnlyCompleted ASGState = "only-completed"
+	ASGOnlyDeleted   ASGState = "only-deleted"
+	ASGDone          ASGState = "done"
+)
+
 type Template struct {
 	Name string
 	EC2  EC2State
 	Spot SpotState
 	Node NodeState
+	ASG  ASGState
 }
 
 type Builder struct {
@@ -92,6 +104,7 @@ func (b *Builder) Build() collectors.Lists {
 			ec2  ec2.Instance
 			spot spot.Instance
 			node node.Node
+			asg  asg.Instance
 		)
 
 		if template.EC2 != EC2Missing {
@@ -172,6 +185,22 @@ func (b *Builder) Build() collectors.Lists {
 			}
 
 			result.Nodes = append(result.Nodes, node)
+		}
+
+		if template.ASG != ASGMissing {
+			asg.ID = instanceID
+			asg.TriggeredAt = ec2.LaunchTime.Add(time.Hour / 2)
+
+			if template.ASG == ASGDone || template.ASG == ASGOnlyCompleted {
+				asg.Completed = true
+			}
+
+			if template.ASG == ASGDone || template.ASG == ASGOnlyDeleted {
+				asg.Deleted = true
+			}
+
+			result.ASG = append(result.ASG, asg)
+
 		}
 
 	}

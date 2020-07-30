@@ -67,7 +67,7 @@ func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerRefer
 			return owner, fnerr(err, "StatefulSetGetError")
 		}
 
-		return owner, c.getOwnerReadyFromReplicas(owner.Kind,
+		return owner, getOwnerReadyFromReplicas(owner.Kind,
 			sts.Spec.Replicas, sts.Status.ReadyReplicas)
 
 	case "ReplicaSet":
@@ -78,7 +78,7 @@ func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerRefer
 
 		parent := meta_v1.GetControllerOf(rs)
 		if parent == nil {
-			return owner, c.getOwnerReadyFromReplicas(owner.Kind,
+			return owner, getOwnerReadyFromReplicas(owner.Kind,
 				rs.Spec.Replicas, rs.Status.AvailableReplicas)
 		}
 
@@ -87,7 +87,7 @@ func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerRefer
 			return parent, fnerr(err, "DeploymentGetError")
 		}
 
-		return parent, c.getOwnerReadyFromReplicas(parent.Kind,
+		return parent, getOwnerReadyFromReplicas(parent.Kind,
 			deploy.Spec.Replicas, deploy.Status.AvailableReplicas)
 
 	case "Job":
@@ -99,7 +99,7 @@ func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerRefer
 	}
 }
 
-func (c *client) getOwnerReadyFromReplicas(kind string, specReplicas *int32, haveReplicas int32) OwnerReadyReason {
+func getOwnerReadyFromReplicas(kind string, specReplicas *int32, haveReplicas int32) OwnerReadyReason {
 	wantReplicas := int32(1)
 	if specReplicas != nil {
 		wantReplicas = *specReplicas

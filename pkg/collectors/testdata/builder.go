@@ -2,6 +2,7 @@ package testdata
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 	v1 "k8s.io/api/core/v1"
 )
 
@@ -49,7 +51,7 @@ const (
 	ASGDone          ASGState = "done"
 )
 
-type Template struct {
+type InstanceTemplate struct {
 	Name string
 	EC2  EC2State
 	Spot SpotState
@@ -57,9 +59,31 @@ type Template struct {
 	ASG  ASGState
 }
 
+type OwnerKind string
+
+const (
+	OwnerMissing     OwnerKind = ""
+	OwnerDeployment  OwnerKind = "Deployment"
+	OwnerStatefulSet OwnerKind = "StatefulSet"
+	OwnerNode        OwnerKind = "Node"
+	OwnerDaemonSet   OwnerKind = "DaemonSet"
+	OwnerReplicaSet  OwnerKind = "ReplicaSet"
+	OwnerJob         OwnerKind = "Job"
+)
+
+type PodTemplate struct {
+	Owner     OwnerKind
+	Name      string
+	Namespace string
+
+	TotalReplicas   int32
+	UnreadyReplicas int32
+}
+
 type Builder struct {
-	rand      *rand.Rand
-	templates []Template
+	rand              *rand.Rand
+	instanceTemplates []InstanceTemplate
+	podTemplates      []PodTemplate
 }
 
 func NewBuilder() *Builder {
@@ -79,16 +103,25 @@ func (b *Builder) randTime() time.Time {
 		Add(time.Second * time.Duration(b.rand.Uint32()%604800))
 }
 
-func (b *Builder) Add(n int, template Template) {
+func (b *Builder) AddInstance(n int, template InstanceTemplate) {
 	for i := 0; i < n; i++ {
-		b.templates = append(b.templates, template)
+		b.instanceTemplates = append(b.instanceTemplates, template)
 	}
+}
+
+func (b *Builder) AddWorkload(template PodTemplate) {
+	b.podTemplates = append(b.podTemplates, template)
 }
 
 func (b *Builder) Build() collectors.Lists {
 	result := collectors.Lists{}
+	result = b.buildInstances(result)
+	result = b.buildPods(result)
+	return result
+}
 
-	for i, template := range b.templates {
+func (b *Builder) buildInstances(result collectors.Lists) collectors.Lists {
+	for i, template := range b.instanceTemplates {
 		// InstanceID consisting of two parts a random one and the actual order
 		// number. This is just to make the IDs look more real and "unsorted"
 		// while still being able to identify them.
@@ -203,6 +236,47 @@ func (b *Builder) Build() collectors.Lists {
 
 		}
 
+	}
+
+	return result
+}
+
+func (b *Builder) buildPods(result collectors.Lists) collectors.Lists {
+	for _, template := range b.podTemplates {
+		nodeMax := len(result.Nodes)
+
+		specReplicas := template.TotalReplicas
+		if specReplicas == math.MaxInt32 {
+			specReplicas = int32(nodeMax)
+		}
+
+		nodePerm := b.rand.Perm(int(specReplicas))
+
+		for j := int32(0); j < specReplicas; j++ {
+			replica := pod.Pod{}
+
+			node := result.Nodes[nodePerm[j]%nodeMax]
+			replica.NodeName = node.NodeName
+
+			replica.Namespace = "default"
+			if template.Namespace != "" {
+				replica.Namespace = template.Namespace
+			}
+
+			switch template.Owner {
+			case OwnerNode:
+				replica.Name = fmt.Sprintf("%s-%s", template.Name, replica.NodeName)
+			default:
+				replica.Name = fmt.Sprintf("%s-%d", template.Name, j)
+			}
+
+			replica.OwnerKind = string(template.Owner)
+			if template.Owner != OwnerMissing {
+				replica.OwnerName = template.Name
+			}
+
+			result.Pods = append(result.Pods, replica)
+		}
 	}
 
 	return result

@@ -9,3 +9,8 @@ func SortInstances(instances collectors.Instances) {
 		Sort(collectors.ByEC2State).
 		SortReverse(collectors.ByTriggeredAt)
 }
+
+func SortPods(pods collectors.Pods) {
+	pods.
+		Sort(collectors.PodsByNeedsEviction)
+}

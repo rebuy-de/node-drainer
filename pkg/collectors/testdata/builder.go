@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
@@ -15,9 +16,11 @@ import (
 type EC2State string
 
 const (
-	EC2Missing    EC2State = ""
-	EC2Running    EC2State = "running"
-	EC2Terminated EC2State = "terminated"
+	EC2Missing      EC2State = ""
+	EC2Pending      EC2State = "pending"
+	EC2Running      EC2State = "running"
+	EC2ShuttingDown EC2State = "shutting-down"
+	EC2Terminated   EC2State = "terminated"
 )
 
 type SpotState string
@@ -36,11 +39,22 @@ const (
 	NodeUnschedulable NodeState = "unschedulable"
 )
 
+type ASGState string
+
+const (
+	ASGMissing       ASGState = ""
+	ASGPending       ASGState = "pending"
+	ASGOnlyCompleted ASGState = "only-completed"
+	ASGOnlyDeleted   ASGState = "only-deleted"
+	ASGDone          ASGState = "done"
+)
+
 type Template struct {
 	Name string
 	EC2  EC2State
 	Spot SpotState
 	Node NodeState
+	ASG  ASGState
 }
 
 type Builder struct {
@@ -90,6 +104,7 @@ func (b *Builder) Build() collectors.Lists {
 			ec2  ec2.Instance
 			spot spot.Instance
 			node node.Node
+			asg  asg.Instance
 		)
 
 		if template.EC2 != EC2Missing {
@@ -114,10 +129,13 @@ func (b *Builder) Build() collectors.Lists {
 				ec2.InstanceLifecycle = "spot"
 			}
 
-			switch template.EC2 {
-			case EC2Terminated:
+			if template.EC2 == EC2ShuttingDown || template.EC2 == EC2Terminated {
 				terminationTime := ec2.LaunchTime.Add(time.Hour)
 				ec2.TerminationTime = &terminationTime
+			}
+
+			if template.EC2 == EC2Running || template.EC2 == EC2ShuttingDown {
+				ec2.NodeName = nodeName
 			}
 
 			result.EC2 = append(result.EC2, ec2)
@@ -148,6 +166,14 @@ func (b *Builder) Build() collectors.Lists {
 			node.InstanceID = instanceID
 			node.NodeName = nodeName
 
+			if template.Name != "stateful" {
+				node.Taints = append(node.Taints, v1.Taint{
+					Key:    "rebuy.com/pool",
+					Value:  template.Name,
+					Effect: "NoSchedule",
+				})
+			}
+
 			if template.Node == NodeUnschedulable {
 				node.Unschedulable = true
 
@@ -159,6 +185,22 @@ func (b *Builder) Build() collectors.Lists {
 			}
 
 			result.Nodes = append(result.Nodes, node)
+		}
+
+		if template.ASG != ASGMissing {
+			asg.ID = instanceID
+			asg.TriggeredAt = ec2.LaunchTime.Add(time.Hour / 2)
+
+			if template.ASG == ASGDone || template.ASG == ASGOnlyCompleted {
+				asg.Completed = true
+			}
+
+			if template.ASG == ASGDone || template.ASG == ASGOnlyDeleted {
+				asg.Deleted = true
+			}
+
+			result.ASG = append(result.ASG, asg)
+
 		}
 
 	}

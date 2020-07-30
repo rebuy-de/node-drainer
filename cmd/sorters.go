@@ -12,5 +12,6 @@ func SortInstances(instances collectors.Instances) {
 
 func SortPods(pods collectors.Pods) {
 	pods.
-		Sort(collectors.PodsByNeedsEviction)
+		Sort(collectors.PodsByNeedsEviction).
+		Sort(collectors.PodsByImmuneToEviction)
 }

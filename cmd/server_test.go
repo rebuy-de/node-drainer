@@ -12,7 +12,7 @@ import (
 )
 
 func TestServerRender(t *testing.T) {
-	lists := testdata.Default()
+	lists := testdata.Default(t)
 	server := new(Server)
 
 	w := httptest.NewRecorder()

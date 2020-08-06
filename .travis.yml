@@ -10,7 +10,6 @@ script:
 - docker run
     --rm -t
     -v $TRAVIS_BUILD_DIR:/node-drainer
-    -e TZ=Europe/Berlin
     -w /node-drainer
     quay.io/rebuy/rebuy-go-sdk:v2.4.0
     buildutil -v

@@ -11,6 +11,10 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/testdata"
 )
 
+func init() {
+	useUTC = true
+}
+
 func TestServerRender(t *testing.T) {
 	lists := testdata.Default()
 	server := new(Server)

@@ -25,6 +25,8 @@ const (
 	EC2Terminated   EC2State = "terminated"
 )
 
+var AllEC2States = []EC2State{EC2Missing, EC2Pending, EC2Running, EC2ShuttingDown, EC2Terminated}
+
 type SpotState string
 
 const (
@@ -50,6 +52,8 @@ const (
 	ASGOnlyDeleted   ASGState = "only-deleted"
 	ASGDone          ASGState = "done"
 )
+
+var AllASGStates = []ASGState{ASGMissing, ASGPending, ASGOnlyDeleted, ASGOnlyCompleted, ASGDone}
 
 type InstanceTemplate struct {
 	Name string

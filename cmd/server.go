@@ -18,6 +18,12 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 )
 
+// useUTC is used for showing dates to the user. On tests it should always use
+// UTC, but generally it should use the servers time zone. Using the servers
+// time zone is bad for generating golden files, because then the tests would
+// depend on the developers machine settings.
+var useUTC bool
+
 // Healthier is a simple interface, that can easily be implemented by all
 // critical services. It is used to indicate their health statuses.
 type Healthier interface {
@@ -137,7 +143,14 @@ func (s *Server) respondTemplate(w http.ResponseWriter, r *http.Request, name st
 			}
 
 			format := "Mon, 2 Jan 15:04:05"
-			return t.Local().Format(format), nil
+
+			if useUTC {
+				t = t.UTC()
+			} else {
+				t = t.Local()
+			}
+
+			return t.Format(format), nil
 		},
 	})
 

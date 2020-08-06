@@ -91,8 +91,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 
 	InstMainLoopStarted(ctx, instances)
 
-	// Mark all instances as complete immediately.
-	for _, instance := range instances.Select(collectors.WantsShutdown).Select(collectors.PendingLifecycleCompletion) {
+	for _, instance := range SelectInstancesThatNeedLifecycleCompletion(instances) {
 		InstMainLoopCompletingInstance(ctx, instance)
 
 		err := l.collectors.ASG.Complete(ctx, instance.InstanceID)
@@ -100,8 +99,8 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 			return errors.Wrap(err, "failed to mark node as complete")
 		}
 
-		// Safe action that does not need a loop-restart.
 		l.triggerLoop.Emit()
+		return nil
 	}
 
 	// Tell instrumentation that an instance state changed.
@@ -124,8 +123,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		InstMainLoopInstanceStateChanged(ctx, instance, prevState, currState)
 	}
 
-	// Clean up old messages
-	for _, instance := range instances.Filter(collectors.HasEC2Data).Select(collectors.HasLifecycleMessage) {
+	for _, instance := range SelectInstancesThanNeedLifecycleDeletion(instances) {
 		InstMainLoopDeletingLifecycleMessage(ctx, instance)
 
 		age := time.Since(instance.ASG.TriggeredAt)
@@ -140,8 +138,8 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 			return errors.Wrap(err, "failed to delete message")
 		}
 
-		// Safe action that does not need a loop-restart.
 		l.triggerLoop.Emit()
+		return nil
 	}
 
 	return nil

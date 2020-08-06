@@ -103,26 +103,6 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		return nil
 	}
 
-	// Tell instrumentation that an instance state changed.
-	for _, instance := range instances {
-		currState := instance.EC2.State
-		prevState := l.stateCache[instance.InstanceID]
-
-		l.stateCache[instance.InstanceID] = currState
-
-		if currState == prevState {
-			continue
-		}
-
-		if prevState == "" {
-			// It means there is no previous state. This might happen
-			// after a restart.
-			continue
-		}
-
-		InstMainLoopInstanceStateChanged(ctx, instance, prevState, currState)
-	}
-
 	for _, instance := range SelectInstancesThanNeedLifecycleDeletion(instances) {
 		InstMainLoopDeletingLifecycleMessage(ctx, instance)
 

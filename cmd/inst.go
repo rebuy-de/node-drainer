@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/instutil"
@@ -17,15 +16,19 @@ const (
 	metricMainLoopPendingInstances = "mainloop_pending_instances"
 )
 
-type metrics struct {
-	mainloopIteration prometheus.Counter
-}
+type instCacheKey string
+
+const instCacheKeyStates instCacheKey = "ec2-instance-state-cache"
 
 func InitIntrumentation(ctx context.Context) context.Context {
 	ctx = instutil.NewCounter(ctx, metricMainLoopIterations)
 	ctx = instutil.NewGauge(ctx, metricMainLoopPendingInstances)
 	ctx = instutil.NewHistogram(ctx, metricMainLoopDrainDuration,
 		instutil.BucketScale(60, 1, 2, 3, 5, 8, 13, 21, 34)...)
+
+	cache := map[string]string{}
+	ctx = context.WithValue(ctx, instCacheKeyStates, &cache)
+
 	return ctx
 }
 
@@ -46,29 +49,48 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances) {
 		)))
 	}
 
+	// Log changed instance states
+	cache, ok := ctx.Value(instCacheKeyStates).(*map[string]string)
+	if ok {
+		for _, instance := range instances {
+			logger := logutil.Get(ctx).
+				WithFields(logutil.FromStruct(instance))
+
+			currState := instance.EC2.State
+			prevState := (*cache)[instance.InstanceID]
+
+			(*cache)[instance.InstanceID] = currState
+
+			if currState == prevState {
+				continue
+			}
+
+			if prevState == "" {
+				// It means there is no previous state. This might happen
+				// after a restart.
+				continue
+			}
+
+			logger.Infof("instance state changed from '%s' to '%s'", prevState, currState)
+
+			if currState == ec2.InstanceStateTerminated {
+				duration := instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt)
+				logger.Infof("instance drainage took %v", duration)
+
+				m, ok := instutil.Histogram(ctx, metricMainLoopDrainDuration)
+				if ok {
+					m.Observe(duration.Seconds())
+				}
+			}
+		}
+	}
+
 }
 
 func InstMainLoopCompletingInstance(ctx context.Context, instance collectors.Instance) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).
 		Info("marking node as complete")
-}
-
-func InstMainLoopInstanceStateChanged(ctx context.Context, instance collectors.Instance, prevState, currState string) {
-	logger := logutil.Get(ctx).
-		WithFields(logutil.FromStruct(instance))
-
-	logger.Infof("instance state changed from '%s' to '%s'", prevState, currState)
-
-	if currState == ec2.InstanceStateTerminated {
-		duration := instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt)
-		logger.Infof("instance drainage took %v", duration)
-
-		m, ok := instutil.Histogram(ctx, metricMainLoopDrainDuration)
-		if ok {
-			m.Observe(duration.Seconds())
-		}
-	}
 }
 
 func InstMainLoopDeletingLifecycleMessage(ctx context.Context, instance collectors.Instance) {

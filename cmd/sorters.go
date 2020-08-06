@@ -15,3 +15,16 @@ func SortPods(pods collectors.Pods) {
 		Sort(collectors.PodsByNeedsEviction).
 		Sort(collectors.PodsByImmuneToEviction)
 }
+
+func SelectInstancesThatNeedLifecycleCompletion(instances collectors.Instances) collectors.Instances {
+	return instances.
+		Select(collectors.HasEC2State("running")).
+		Select(collectors.PendingLifecycleCompletion)
+}
+
+func SelectInstancesThanNeedLifecycleDeletion(instances collectors.Instances) collectors.Instances {
+	return instances.
+		Filter(collectors.HasEC2Data).
+		Filter(collectors.PendingLifecycleCompletion).
+		Select(collectors.HasLifecycleMessage)
+}

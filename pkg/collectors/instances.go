@@ -34,11 +34,11 @@ func (i *Instance) WantsShutdown() bool {
 }
 
 func (i *Instance) PendingLifecycleCompletion() bool {
-	return i.HasASGData() && i.ASG.Deleted == true
+	return i.HasASGData() && !i.ASG.Completed
 }
 
 func (i *Instance) HasLifecycleMessage() bool {
-	return i.HasASGData() && i.ASG.Deleted == false
+	return i.HasASGData() && !i.ASG.Deleted
 }
 
 func (i *Instance) HasEC2State(states ...string) bool {

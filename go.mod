@@ -13,6 +13,7 @@ require (
 	github.com/rebuy-de/rebuy-go-sdk/v2 v2.4.1-0.20200612124820-6398f0afc167
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
+	github.com/stretchr/testify v1.5.1
 	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
 	k8s.io/api v0.18.2
 	k8s.io/apimachinery v0.18.2

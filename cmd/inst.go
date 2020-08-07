@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	metricMainLoopIterations       = "mainloop_iterations_total"
 	metricMainLoopActions          = "mainloop_actions_total"
 	metricMainLoopDrainDuration    = "mainloop_drain_duration"
+	metricMainLoopIterations       = "mainloop_iterations_total"
 	metricMainLoopPendingInstances = "mainloop_pending_instances"
+	metricMainLoopPodStats         = "mainloop_pod_stats"
 )
 
 type instCacheKey string
@@ -22,11 +23,12 @@ type instCacheKey string
 const instCacheKeyStates instCacheKey = "ec2-instance-state-cache"
 
 func InitIntrumentation(ctx context.Context) context.Context {
-	ctx = instutil.NewCounter(ctx, metricMainLoopIterations)
 	ctx = instutil.NewCounterVec(ctx, metricMainLoopActions, "action")
-	ctx = instutil.NewGauge(ctx, metricMainLoopPendingInstances)
 	ctx = instutil.NewHistogram(ctx, metricMainLoopDrainDuration,
 		instutil.BucketScale(60, 1, 2, 3, 5, 8, 13, 21, 34)...)
+	ctx = instutil.NewCounter(ctx, metricMainLoopIterations)
+	ctx = instutil.NewGauge(ctx, metricMainLoopPendingInstances)
+	ctx = instutil.NewGaugeVec(ctx, metricMainLoopPodStats, "name")
 
 	// Register the already known label values, so Prometheus starts with 0 and
 	// not 1 and properly calculates rates.

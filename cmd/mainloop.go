@@ -83,6 +83,26 @@ func (l *MainLoop) Run(ctx context.Context) error {
 }
 
 func (l *MainLoop) runOnce(ctx context.Context) error {
+	// Implementation Detail: This function uses a lot of for loops that
+	// iterate of the filtered instances. While we mostly return on the first
+	// iteration, it still makes sense to use the loops, because:
+	//   * No need to check explicitly whether the filtered list is empty.
+	//   * Possibility to skip an item when some additional condition is not met.
+	// Also it makes sense to be consistent with the usage of loops, because it
+	// makes the code more readable (ie visual separation of steps by loop
+	// blocks).
+
+	// Another One: A call of this function should only do a single action (eg
+	// evict a pod or complete an instance lifecycle). This is, because the
+	// action can change the underlying data, but this is not reflected in the
+	// local variables. Additionally it is easier to restart the whole thing
+	// after any condition is met than having to keep track about possible side
+	// effects of any action. One example:
+	// * Evicting a pod makes all other pods with the same owner (eg
+	//   Deployment) unevictable, but that data is not updated in the local
+	//   variables. We could implement things to make it update, but is easier
+	//   to just restart the loop every time.
+
 	ctx = logutil.Start(ctx, "loop")
 
 	instances, _ := collectors.Combine(l.collectors.List(ctx))

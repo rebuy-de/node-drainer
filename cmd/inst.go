@@ -12,6 +12,7 @@ import (
 
 const (
 	metricMainLoopIterations       = "mainloop_iterations_total"
+	metricMainLoopActions          = "mainloop_actions_total"
 	metricMainLoopDrainDuration    = "mainloop_drain_duration"
 	metricMainLoopPendingInstances = "mainloop_pending_instances"
 )
@@ -22,9 +23,19 @@ const instCacheKeyStates instCacheKey = "ec2-instance-state-cache"
 
 func InitIntrumentation(ctx context.Context) context.Context {
 	ctx = instutil.NewCounter(ctx, metricMainLoopIterations)
+	ctx = instutil.NewCounterVec(ctx, metricMainLoopActions, "action")
 	ctx = instutil.NewGauge(ctx, metricMainLoopPendingInstances)
 	ctx = instutil.NewHistogram(ctx, metricMainLoopDrainDuration,
 		instutil.BucketScale(60, 1, 2, 3, 5, 8, 13, 21, 34)...)
+
+	// Register the already known label values, so Prometheus starts with 0 and
+	// not 1 and properly calculates rates.
+	c, ok := instutil.CounterVec(ctx, metricMainLoopActions)
+	if ok {
+		c.WithLabelValues("noop").Add(0)
+		c.WithLabelValues("lifecycle-complete").Add(0)
+		c.WithLabelValues("lifecycle-delete").Add(0)
+	}
 
 	cache := map[string]string{}
 	ctx = context.WithValue(ctx, instCacheKeyStates, &cache)
@@ -87,16 +98,35 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances) {
 
 }
 
+func InstMainLoopNoop(ctx context.Context) {
+	logutil.Get(ctx).Debug("mainloop finished without action")
+
+	c, ok := instutil.CounterVec(ctx, metricMainLoopActions)
+	if ok {
+		c.WithLabelValues("noop").Inc()
+	}
+}
+
 func InstMainLoopCompletingInstance(ctx context.Context, instance collectors.Instance) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).
 		Info("marking node as complete")
+
+	c, ok := instutil.CounterVec(ctx, metricMainLoopActions)
+	if ok {
+		c.WithLabelValues("lifecycle-complete").Inc()
+	}
 }
 
 func InstMainLoopDeletingLifecycleMessage(ctx context.Context, instance collectors.Instance) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).
 		Info("deleting lifecycle message from SQS")
+
+	c, ok := instutil.CounterVec(ctx, metricMainLoopActions)
+	if ok {
+		c.WithLabelValues("lifecycle-delete").Inc()
+	}
 }
 
 func InstMainLoopDeletingLifecycleMessageAgeSanityCheckFailed(ctx context.Context, instance collectors.Instance, age time.Duration) {

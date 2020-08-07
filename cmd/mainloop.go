@@ -142,5 +142,6 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		return nil
 	}
 
+	InstMainLoopNoop(ctx)
 	return nil
 }

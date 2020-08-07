@@ -12,8 +12,9 @@ import (
 )
 
 type contextKeyCounter string
-type contextKeyHistogram string
+type contextKeyCounterVec string
 type contextKeyGauge string
+type contextKeyHistogram string
 
 var namespace string
 
@@ -41,6 +42,28 @@ func Counter(ctx context.Context, name string) (prometheus.Counter, bool) {
 	metric, ok := ctx.Value(contextKeyCounter(name)).(prometheus.Counter)
 	if !ok {
 		logutil.Get(ctx).Warnf("counter with name '%s' not found", name)
+	}
+	return metric, ok
+}
+
+func NewCounterVec(ctx context.Context, name string, labels ...string) context.Context {
+	metric := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      name,
+	}, labels)
+	err := prometheus.Register(metric)
+	if err != nil {
+		logutil.Get(ctx).
+			WithError(errors.WithStack(err)).
+			Errorf("failed to register counter vector with name '%s'", name)
+	}
+	return context.WithValue(ctx, contextKeyCounterVec(name), metric)
+}
+
+func CounterVec(ctx context.Context, name string) (*prometheus.CounterVec, bool) {
+	metric, ok := ctx.Value(contextKeyCounterVec(name)).(*prometheus.CounterVec)
+	if !ok {
+		logutil.Get(ctx).Warnf("counter vec with name '%s' not found", name)
 	}
 	return metric, ok
 }

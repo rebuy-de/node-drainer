@@ -116,3 +116,29 @@ func (instances Instances) Filter(selector Selector) Instances {
 	}
 	return result
 }
+
+// FilterByAnyPod returns a subset of the instances based on the Pod selector.
+// The subset only contains instances that do not contain a single Pod which
+// matches the given selector.
+func (instances Instances) FilterByAnyPod(selector PodSelector) Instances {
+	result := Instances{}
+	for _, i := range instances {
+		if len(i.Pods.Select(selector)) == 0 {
+			result = append(result, i)
+		}
+	}
+	return result
+}
+
+// FilterByAllPods returns a subset of the instances based on the Pod
+// selector. The subset only contains instances that only contain Pods which
+// matche the given selector.
+func (instances Instances) FilterByAllPods(selector PodSelector) Instances {
+	result := Instances{}
+	for _, i := range instances {
+		if len(i.Pods.Filter(selector)) == 0 {
+			result = append(result, i)
+		}
+	}
+	return result
+}

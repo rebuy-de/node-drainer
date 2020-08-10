@@ -14,6 +14,7 @@ import (
 type contextKeyCounter string
 type contextKeyCounterVec string
 type contextKeyGauge string
+type contextKeyGaugeVec string
 type contextKeyHistogram string
 
 var namespace string
@@ -116,6 +117,28 @@ func Gauge(ctx context.Context, name string) (prometheus.Gauge, bool) {
 	metric, ok := ctx.Value(contextKeyGauge(name)).(prometheus.Gauge)
 	if !ok {
 		logutil.Get(ctx).Warnf("gauge with name '%s' not found", name)
+	}
+	return metric, ok
+}
+
+func NewGaugeVec(ctx context.Context, name string, labels ...string) context.Context {
+	metric := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      name,
+	}, labels)
+	err := prometheus.Register(metric)
+	if err != nil {
+		logutil.Get(ctx).
+			WithError(errors.WithStack(err)).
+			Errorf("failed to register gauge vector with name '%s'", name)
+	}
+	return context.WithValue(ctx, contextKeyGaugeVec(name), metric)
+}
+
+func GaugeVec(ctx context.Context, name string) (*prometheus.GaugeVec, bool) {
+	metric, ok := ctx.Value(contextKeyGaugeVec(name)).(*prometheus.GaugeVec)
+	if !ok {
+		logutil.Get(ctx).Warnf("gauge vector with name '%s' not found", name)
 	}
 	return metric, ok
 }

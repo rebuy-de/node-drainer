@@ -78,3 +78,13 @@ func (pods Pods) Split(selector PodSelector) (Pods, Pods) {
 
 	return yay, ney
 }
+
+func (pods Pods) Select(selector PodSelector) Pods {
+	result, _ := pods.Split(selector)
+	return result
+}
+
+func (pods Pods) Filter(selector PodSelector) Pods {
+	_, result := pods.Split(selector)
+	return result
+}

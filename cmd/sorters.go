@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"time"
+
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 )
@@ -29,8 +31,9 @@ func SelectInstancesThatNeedLifecycleCompletion(instances collectors.Instances) 
 func SelectInstancesThanNeedLifecycleDeletion(instances collectors.Instances) collectors.Instances {
 	return instances.
 		Filter(collectors.HasEC2Data).
-		Filter(collectors.PendingLifecycleCompletion).
-		Select(collectors.HasLifecycleMessage)
+		Select(collectors.HasASGData).
+		Filter(collectors.LifecycleDeleted).
+		Select(collectors.LifecycleTriggeredOlderThan(time.Hour))
 }
 
 func SelectInstancesThatWantShutdown(instances collectors.Instances) collectors.Instances {

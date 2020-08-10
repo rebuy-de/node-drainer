@@ -116,11 +116,11 @@ func TestSelectInstancesThatNeedLifecycleDeletion(t *testing.T) {
 	instances, _ := collectors.Combine(b.Build())
 
 	result := SelectInstancesThanNeedLifecycleDeletion(instances)
-	assert.Len(t, result, 1)
+	assert.Len(t, result, 2)
 
 	for _, instance := range result {
 		assert.Equal(t, instance.EC2.InstanceID, "", "should not have EC2 data")
-		assert.True(t, instance.ASG.Completed, "should be completed")
+		assert.Equal(t, instance.ASG.ID, instance.InstanceID, "should have ASG data")
 		assert.False(t, instance.ASG.Deleted, "should not be deleted")
 	}
 }

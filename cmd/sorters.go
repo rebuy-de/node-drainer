@@ -29,11 +29,16 @@ func SelectInstancesThatNeedLifecycleCompletion(instances collectors.Instances) 
 }
 
 func SelectInstancesThanNeedLifecycleDeletion(instances collectors.Instances) collectors.Instances {
-	return instances.
-		Filter(collectors.HasEC2Data).
-		Select(collectors.HasASGData).
-		Filter(collectors.LifecycleDeleted).
-		Select(collectors.LifecycleTriggeredOlderThan(time.Hour))
+	return instances.Select(InstancesThanNeedLifecycleDeletion())
+}
+
+func InstancesThanNeedLifecycleDeletion() collectors.Selector {
+	return collectors.InstanceOperatorAnd(
+		collectors.InstanceOperatorNot(collectors.HasEC2Data),
+		collectors.HasASGData,
+		collectors.InstanceOperatorNot(collectors.LifecycleDeleted),
+		collectors.LifecycleTriggeredOlderThan(time.Hour),
+	)
 }
 
 func SelectInstancesThatWantShutdown(instances collectors.Instances) collectors.Instances {
@@ -43,10 +48,19 @@ func SelectInstancesThatWantShutdown(instances collectors.Instances) collectors.
 		Select(collectors.PendingLifecycleCompletion)
 }
 
-//func SelectPodsThatNeedEviction(pods collectors.Pods) collectors.Pods {
-//	return pods
-//}
-//
+func SelectPodsThatNeedEviction(pods collectors.Pods) collectors.Pods {
+	return pods.
+		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
+		Filter(collectors.PodImmuneToEviction)
+}
+
+func SelectPodsReadyForEviction(pods collectors.Pods) collectors.Pods {
+	return pods.
+		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
+		Filter(collectors.PodImmuneToEviction).
+		Select(collectors.PodCanDecrement)
+}
+
 //func SelectPodsThatAreImminueToEviction(pods collectors.Pods) collectors.Pods {
 //	return pods //.Select(collectors.PodImmuneToEviction)
 //}

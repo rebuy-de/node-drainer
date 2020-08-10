@@ -29,3 +29,21 @@ func LifecycleTriggeredOlderThan(age time.Duration) Selector {
 func LifecycleDeleted(i *Instance) bool {
 	return i.ASG.Deleted
 }
+
+func InstanceOperatorNot(selector Selector) Selector {
+	return func(i *Instance) bool {
+		return !selector(i)
+	}
+}
+
+func InstanceOperatorAnd(selectors ...Selector) Selector {
+	return func(i *Instance) bool {
+		for _, selector := range selectors {
+			if !selector(i) {
+				return false
+			}
+		}
+
+		return true
+	}
+}

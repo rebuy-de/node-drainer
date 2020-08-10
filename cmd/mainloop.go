@@ -69,12 +69,11 @@ func (l *MainLoop) Run(ctx context.Context) error {
 				WithError(errors.WithStack(err)).
 				Errorf("main loop run failed %d times in a row", l.failureCount)
 			l.failureCount++
-
-			// Sleep shortly because we do not want to DoS our logging system.
-			time.Sleep(100 * time.Millisecond)
 		} else {
 			l.failureCount = 0
 		}
+
+		time.Sleep(1 * time.Second)
 
 		<-l.signaler.C(ctx, time.Minute)
 	}
@@ -105,11 +104,11 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 
 	ctx = logutil.Start(ctx, "loop")
 
-	instances, _ := collectors.Combine(l.collectors.List(ctx))
+	instances, pods := collectors.Combine(l.collectors.List(ctx))
 	instances = instances.
 		Sort(collectors.ByLaunchTime).SortReverse(collectors.ByTriggeredAt)
 
-	InstMainLoopStarted(ctx, instances)
+	InstMainLoopStarted(ctx, instances, pods)
 
 	for _, instance := range SelectInstancesThatNeedLifecycleCompletion(instances) {
 		InstMainLoopCompletingInstance(ctx, instance)

@@ -72,8 +72,8 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 
 	// Log pod stats
 	var (
-		podsThatNeedEviction = SelectPodsThatNeedEviction(pods)
-		podsReadyForEviction = SelectPodsReadyForEviction(pods)
+		podsThatNeedEviction = pods.Select(PodsThatNeedEviction())
+		podsReadyForEviction = pods.Select(PodsReadyForEviction())
 	)
 
 	gv, ok := instutil.GaugeVec(ctx, metricMainLoopPodStats)

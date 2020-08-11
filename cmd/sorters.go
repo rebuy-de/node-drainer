@@ -43,14 +43,14 @@ func InstancesThatWantShutdown() collectors.Selector {
 		Select(collectors.PendingLifecycleCompletion)
 }
 
-func SelectPodsThatNeedEviction(pods collectors.Pods) collectors.Pods {
-	return pods.
+func PodsThatNeedEviction() collectors.PodSelector {
+	return collectors.PodQuery().
 		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
 		Filter(collectors.PodImmuneToEviction)
 }
 
-func SelectPodsReadyForEviction(pods collectors.Pods) collectors.Pods {
-	return pods.
+func PodsReadyForEviction() collectors.PodSelector {
+	return collectors.PodQuery().
 		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
 		Filter(collectors.PodImmuneToEviction).
 		Select(collectors.PodCanDecrement)

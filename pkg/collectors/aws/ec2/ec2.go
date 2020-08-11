@@ -24,9 +24,9 @@ const (
 
 // Instance is the instance-related data that is retrieved via API.
 type Instance struct {
-	InstanceID        string     `logfield:"instance-id"`
+	InstanceID        string     `logfield:"instance-id,omitempty"`
 	InstanceName      string     `logfield:"instance-name"`
-	NodeName          string     `logfield:"node-name"`
+	NodeName          string     `logfield:"node-name,omitempty"`
 	InstanceType      string     `logfield:"instance-type"`
 	AvailabilityZone  string     `logfield:"availability-zone"`
 	InstanceLifecycle string     `logfield:"ec2-instance-lifecycle"`

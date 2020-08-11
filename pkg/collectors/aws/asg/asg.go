@@ -52,7 +52,7 @@ type Client interface {
 // Instance is the instance-related data that is retrieved via SQS.
 type Instance struct {
 	// ID is the EC2 Instance ID
-	ID string `logfield:"instance-id"`
+	ID string `logfield:"instance-id,omitempty"`
 
 	// TriggeredAt is the thime then the shutdown was triggered.
 	TriggeredAt time.Time `logfield:"lifecycle-triggered-at"`

@@ -32,7 +32,7 @@ const (
 
 // Instance is the instance-related data that is retrieved via API.
 type Instance struct {
-	InstanceID       string    `logfield:"instance-id"`
+	InstanceID       string    `logfield:"instance-id,omitempty"`
 	RequestID        string    `logfield:"spot-request-id"`
 	CreateTime       time.Time `logfield:"spot-create-time"`
 	State            string    `logfield:"spot-state"`

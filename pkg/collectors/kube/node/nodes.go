@@ -18,8 +18,8 @@ import (
 )
 
 type Node struct {
-	InstanceID    string     `logfield:"instance-id"`
-	NodeName      string     `logfield:"node-name"`
+	InstanceID    string     `logfield:"instance-id,omitempty"`
+	NodeName      string     `logfield:"node-name,omitempty"`
 	Unschedulable bool       `logfield:"node-unschedulable"`
 	Taints        []v1.Taint `logfield:"node-taints"`
 }

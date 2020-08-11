@@ -40,20 +40,26 @@ func InstancesThatWantShutdown() collectors.InstanceSelector {
 	return collectors.InstanceQuery().
 		Select(collectors.HasEC2Data).
 		Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
-		Select(collectors.PendingLifecycleCompletion)
+		Select(collectors.HasASGData).
+		Filter(collectors.LifecycleCompleted)
 }
 
-func PodsThatNeedEviction() collectors.PodSelector {
+func PodsThatWantEviction() collectors.PodSelector {
 	return collectors.PodQuery().
-		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
+		SelectByInstance(InstancesThatWantShutdown()).
 		Filter(collectors.PodImmuneToEviction)
 }
 
 func PodsReadyForEviction() collectors.PodSelector {
 	return collectors.PodQuery().
-		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
-		Filter(collectors.PodImmuneToEviction).
+		Select(PodsThatWantEviction()).
 		Select(collectors.PodCanDecrement)
+}
+
+func PodsUnreadyForEviction() collectors.PodSelector {
+	return collectors.PodQuery().
+		Select(PodsThatWantEviction()).
+		Filter(collectors.PodCanDecrement)
 }
 
 //func SelectPodsThatAreImminueToEviction(pods collectors.Pods) collectors.Pods {

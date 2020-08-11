@@ -42,8 +42,9 @@ func InitIntrumentation(ctx context.Context) context.Context {
 	gv, ok := instutil.GaugeVec(ctx, metricMainLoopPodStats)
 	if ok {
 		gv.WithLabelValues("total").Add(0)
-		gv.WithLabelValues("need-eviction").Add(0)
-		gv.WithLabelValues("ready-eviction").Add(0)
+		gv.WithLabelValues("eviction-want").Add(0)
+		gv.WithLabelValues("eviction-ready").Add(0)
+		gv.WithLabelValues("eviction-unready").Add(0)
 	}
 
 	cache := map[string]string{}
@@ -70,26 +71,28 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 		)))
 	}
 
-	// Log pod stats
 	var (
-		podsThatNeedEviction = pods.Select(PodsThatNeedEviction())
-		podsReadyForEviction = pods.Select(PodsReadyForEviction())
+		podsThatWantEviction   = pods.Select(PodsThatWantEviction())
+		podsReadyForEviction   = pods.Select(PodsReadyForEviction())
+		podsUnreadyForEviction = pods.Select(PodsUnreadyForEviction())
 	)
 
+	// Log pod stats
 	gv, ok := instutil.GaugeVec(ctx, metricMainLoopPodStats)
 	if ok {
 		gv.WithLabelValues("total").Set(float64(len(pods)))
-		gv.WithLabelValues("need-eviction").Set(float64(len(podsThatNeedEviction)))
-		gv.WithLabelValues("ready-eviction").Set(float64(len(podsReadyForEviction)))
+		gv.WithLabelValues("eviction-want").Set(float64(len(podsThatWantEviction)))
+		gv.WithLabelValues("eviction-ready").Set(float64(len(podsReadyForEviction)))
+		gv.WithLabelValues("eviction-unready").Set(float64(len(podsUnreadyForEviction)))
 	}
-	if len(podsThatNeedEviction) > 0 {
+	if len(podsThatWantEviction) > 0 {
 		logutil.Get(ctx).
-			Debugf("there are %d pods that need eviction", len(podsThatNeedEviction))
-	}
-
-	if len(podsThatNeedEviction) > 0 {
-		logutil.Get(ctx).
-			Debugf("there are %d pods that are ready for eviction", len(podsReadyForEviction))
+			WithField("eviction-want", len(podsThatWantEviction)).
+			WithField("eviction-ready", len(podsReadyForEviction)).
+			WithField("eviction-unready", len(podsUnreadyForEviction)).
+			Debugf("there are %d pods that want eviction (%d ready, %d unready)",
+				len(podsThatWantEviction), len(podsReadyForEviction), len(podsUnreadyForEviction),
+			)
 	}
 
 	// Log changed instance states

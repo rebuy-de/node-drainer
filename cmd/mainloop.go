@@ -110,7 +110,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 
 	InstMainLoopStarted(ctx, instances, pods)
 
-	for _, instance := range SelectInstancesThatNeedLifecycleCompletion(instances) {
+	for _, instance := range instances.Select(InstancesThatNeedLifecycleCompletion()) {
 		InstMainLoopCompletingInstance(ctx, instance)
 
 		err := l.collectors.ASG.Complete(ctx, instance.InstanceID)
@@ -122,7 +122,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		return nil
 	}
 
-	for _, instance := range SelectInstancesThanNeedLifecycleDeletion(instances) {
+	for _, instance := range instances.Select(InstancesThanNeedLifecycleDeletion()) {
 		InstMainLoopDeletingLifecycleMessage(ctx, instance)
 
 		age := time.Since(instance.ASG.TriggeredAt)

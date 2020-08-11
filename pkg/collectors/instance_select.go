@@ -2,8 +2,7 @@ package collectors
 
 import "time"
 
-// Selector is a function type that defines if an instance should be selected
-// and is used by Select and Filter.
+// Selector is a function type that defines if an instance should be selected.
 type Selector func(i *Instance) bool
 
 func HasEC2Data(i *Instance) bool { return i.HasEC2Data() }
@@ -30,20 +29,49 @@ func LifecycleDeleted(i *Instance) bool {
 	return i.ASG.Deleted
 }
 
-func InstanceOperatorNot(selector Selector) Selector {
+// InstanceQuery returns a dummy selector that selects all instances. It is
+// used to make chaining selectors prettier while making sure the type is
+// correct.
+//
+// Without:
+//    Selector(HasEC2Data).
+//        Select(HasASGData).
+//        Filter(LifecycleDeleted)
+// With:
+//    InstanceQuery().
+//        Select(HasEC2Data).
+//        Select(HasASGData).
+//        Filter(LifecycleDeleted)
+func InstanceQuery() Selector {
 	return func(i *Instance) bool {
-		return !selector(i)
+		return true
 	}
 }
 
-func InstanceOperatorAnd(selectors ...Selector) Selector {
-	return func(i *Instance) bool {
-		for _, selector := range selectors {
-			if !selector(i) {
+func (s1 Selector) Select(s2 Selector) Selector {
+	return Selector(func(i *Instance) bool {
+		return s1(i) && s2(i)
+	})
+}
+
+func (s1 Selector) Filter(s2 Selector) Selector {
+	return Selector(func(i *Instance) bool {
+		return s1(i) && !s2(i)
+	})
+}
+
+func (is Selector) FilterByAllPods(ps PodSelector) Selector {
+	return Selector(func(i *Instance) bool {
+		if !is(i) {
+			return false
+		}
+
+		for _, pod := range i.Pods {
+			if !ps(&pod) {
 				return false
 			}
 		}
 
 		return true
-	}
+	})
 }

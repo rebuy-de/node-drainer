@@ -21,28 +21,23 @@ func SortPods(pods collectors.Pods) {
 		Sort(collectors.PodsByImmuneToEviction)
 }
 
-func SelectInstancesThatNeedLifecycleCompletion(instances collectors.Instances) collectors.Instances {
-	return instances.
+func InstancesThatNeedLifecycleCompletion() collectors.Selector {
+	return collectors.InstanceQuery().
 		Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
 		Select(collectors.PendingLifecycleCompletion).
 		FilterByAllPods(collectors.PodImmuneToEviction)
 }
 
-func SelectInstancesThanNeedLifecycleDeletion(instances collectors.Instances) collectors.Instances {
-	return instances.Select(InstancesThanNeedLifecycleDeletion())
-}
-
 func InstancesThanNeedLifecycleDeletion() collectors.Selector {
-	return collectors.InstanceOperatorAnd(
-		collectors.InstanceOperatorNot(collectors.HasEC2Data),
-		collectors.HasASGData,
-		collectors.InstanceOperatorNot(collectors.LifecycleDeleted),
-		collectors.LifecycleTriggeredOlderThan(time.Hour),
-	)
+	return collectors.InstanceQuery().
+		Filter(collectors.HasEC2Data).
+		Select(collectors.HasASGData).
+		Filter(collectors.LifecycleDeleted).
+		Select(collectors.LifecycleTriggeredOlderThan(time.Hour))
 }
 
-func SelectInstancesThatWantShutdown(instances collectors.Instances) collectors.Instances {
-	return instances.
+func InstancesThatWantShutdown() collectors.Selector {
+	return collectors.InstanceQuery().
 		Select(collectors.HasEC2Data).
 		Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
 		Select(collectors.PendingLifecycleCompletion)

@@ -39,18 +39,26 @@ func InitIntrumentation(ctx context.Context) context.Context {
 		c.WithLabelValues("lifecycle-delete").Add(0)
 	}
 
+	gv, ok := instutil.GaugeVec(ctx, metricMainLoopPodStats)
+	if ok {
+		gv.WithLabelValues("total").Add(0)
+		gv.WithLabelValues("need-eviction").Add(0)
+		gv.WithLabelValues("ready-eviction").Add(0)
+	}
+
 	cache := map[string]string{}
 	ctx = context.WithValue(ctx, instCacheKeyStates, &cache)
 
 	return ctx
 }
 
-func InstMainLoopStarted(ctx context.Context, instances collectors.Instances) {
+func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, pods collectors.Pods) {
 	c, ok := instutil.Counter(ctx, metricMainLoopIterations)
 	if ok {
 		c.Inc()
 	}
 
+	// Log instance stats
 	g, ok := instutil.Gauge(ctx, metricMainLoopPendingInstances)
 	if ok {
 		// Note: In the future this should track all instances that have a
@@ -60,6 +68,28 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances) {
 			Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
 			Select(collectors.HasLifecycleMessage),
 		)))
+	}
+
+	// Log pod stats
+	var (
+		podsThatNeedEviction = SelectPodsThatNeedEviction(pods)
+		podsReadyForEviction = SelectPodsReadyForEviction(pods)
+	)
+
+	gv, ok := instutil.GaugeVec(ctx, metricMainLoopPodStats)
+	if ok {
+		gv.WithLabelValues("total").Set(float64(len(pods)))
+		gv.WithLabelValues("need-eviction").Set(float64(len(podsThatNeedEviction)))
+		gv.WithLabelValues("ready-eviction").Set(float64(len(podsReadyForEviction)))
+	}
+	if len(podsThatNeedEviction) > 0 {
+		logutil.Get(ctx).
+			Debugf("there are %d pods that need eviction", len(podsThatNeedEviction))
+	}
+
+	if len(podsThatNeedEviction) > 0 {
+		logutil.Get(ctx).
+			Debugf("there are %d pods that are ready for eviction", len(podsReadyForEviction))
 	}
 
 	// Log changed instance states
@@ -136,4 +166,10 @@ func InstMainLoopDeletingLifecycleMessageAgeSanityCheckFailed(ctx context.Contex
 		WithFields(logutil.FromStruct(instance)).
 		Warnf("termination time of %s was triggered just %v ago, assuming that the cache was empty",
 			instance.InstanceID, age)
+}
+
+func InstMainLoopEvictPod(ctx context.Context, pod collectors.Pod) {
+	logutil.Get(ctx).
+		WithFields(logutil.FromStruct(pod)).
+		Warnf("would evict pod %s", pod.Name)
 }

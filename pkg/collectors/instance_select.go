@@ -2,9 +2,8 @@ package collectors
 
 import "time"
 
-// Selector is a function type that defines if an instance should be selected
-// and is used by Select and Filter.
-type Selector func(i *Instance) bool
+// Selector is a function type that defines if an instance should be selected.
+type InstanceSelector func(i *Instance) bool
 
 func HasEC2Data(i *Instance) bool { return i.HasEC2Data() }
 
@@ -16,11 +15,11 @@ func PendingLifecycleCompletion(i *Instance) bool { return i.PendingLifecycleCom
 
 func HasLifecycleMessage(i *Instance) bool { return i.HasLifecycleMessage() }
 
-func HasEC2State(states ...string) Selector {
+func HasEC2State(states ...string) InstanceSelector {
 	return func(i *Instance) bool { return i.HasEC2State(states...) }
 }
 
-func LifecycleTriggeredOlderThan(age time.Duration) Selector {
+func LifecycleTriggeredOlderThan(age time.Duration) InstanceSelector {
 	return func(i *Instance) bool {
 		return time.Since(i.ASG.TriggeredAt) > age
 	}
@@ -28,22 +27,4 @@ func LifecycleTriggeredOlderThan(age time.Duration) Selector {
 
 func LifecycleDeleted(i *Instance) bool {
 	return i.ASG.Deleted
-}
-
-func InstanceOperatorNot(selector Selector) Selector {
-	return func(i *Instance) bool {
-		return !selector(i)
-	}
-}
-
-func InstanceOperatorAnd(selectors ...Selector) Selector {
-	return func(i *Instance) bool {
-		for _, selector := range selectors {
-			if !selector(i) {
-				return false
-			}
-		}
-
-		return true
-	}
 }

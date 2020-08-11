@@ -29,7 +29,7 @@ func TestSelectInstancesThatNeedLifecycleCompletion(t *testing.T) {
 	t.Run("StatesOnEmptyInstances", func(t *testing.T) {
 		instances, _ := collectors.Combine(b.Build())
 
-		result := SelectInstancesThatNeedLifecycleCompletion(instances)
+		result := instances.Select(InstancesThatNeedLifecycleCompletion())
 		assert.Len(t, result, 2)
 		names := []string{}
 
@@ -63,7 +63,7 @@ func TestSelectInstancesThatNeedLifecycleCompletion(t *testing.T) {
 			UnreadyReplicas: 0,
 		})
 
-		result := SelectInstancesThatNeedLifecycleCompletion(instances)
+		result := instances.Select(InstancesThatNeedLifecycleCompletion())
 		assert.Len(t, result, 2)
 		names := []string{}
 
@@ -93,7 +93,7 @@ func TestSelectInstancesThatNeedLifecycleCompletion(t *testing.T) {
 
 		instances, _ := collectors.Combine(b.Build())
 
-		result := SelectInstancesThatNeedLifecycleCompletion(instances)
+		result := instances.Select(InstancesThatNeedLifecycleCompletion())
 		assert.Len(t, result, 0)
 	})
 }
@@ -115,7 +115,7 @@ func TestSelectInstancesThatNeedLifecycleDeletion(t *testing.T) {
 
 	instances, _ := collectors.Combine(b.Build())
 
-	result := SelectInstancesThanNeedLifecycleDeletion(instances)
+	result := instances.Select(InstancesThanNeedLifecycleDeletion())
 	assert.Len(t, result, 2)
 
 	for _, instance := range result {
@@ -141,7 +141,7 @@ func TestSelectInstancesThatWantShutdown(t *testing.T) {
 	}
 
 	instances, _ := collectors.Combine(b.Build())
-	result := SelectInstancesThatWantShutdown(instances)
+	result := instances.Select(InstancesThatWantShutdown())
 	assert.Len(t, result, 2)
 	names := []string{}
 

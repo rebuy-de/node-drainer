@@ -59,9 +59,23 @@ type InstancePodStats struct {
 }
 
 func (instance Instance) PodStats() InstancePodStats {
-	all := instance.Pods
-	immune, other := all.Split(PodImmuneToEviction)
-	can, cannot := other.Split(PodCanDecrement)
+	var (
+		podImmuneToEviction = PodQuery().
+					Select(PodImmuneToEviction)
+		podCanDecrement = PodQuery().
+				Filter(PodImmuneToEviction).
+				Select(PodCanDecrement)
+		podCannotDecrement = PodQuery().
+					Filter(PodImmuneToEviction).
+					Filter(PodCanDecrement)
+	)
+
+	var (
+		all    = instance.Pods
+		immune = instance.Pods.Select(podImmuneToEviction)
+		can    = instance.Pods.Select(podCanDecrement)
+		cannot = instance.Pods.Select(podCannotDecrement)
+	)
 
 	return InstancePodStats{
 		Total:            len(all),
@@ -75,7 +89,7 @@ func (instance Instance) PodStats() InstancePodStats {
 type Instances []Instance
 
 // Sort returns a sorted list of instances based on the given sorter.
-func (instances Instances) Sort(by By) Instances {
+func (instances Instances) Sort(by InstancesBy) Instances {
 	sort.SliceStable(instances, func(i, j int) bool {
 		return by(&instances[i], &instances[j])
 	})
@@ -85,7 +99,7 @@ func (instances Instances) Sort(by By) Instances {
 
 // SortReverse returns a sorted list of instances based on the given sorter.
 // The output is reversed.
-func (instances Instances) SortReverse(by By) Instances {
+func (instances Instances) SortReverse(by InstancesBy) Instances {
 	sort.SliceStable(instances, func(i, j int) bool {
 		return !by(&instances[i], &instances[j])
 	})
@@ -95,48 +109,10 @@ func (instances Instances) SortReverse(by By) Instances {
 
 // Select returns a subset of the instances based on the selector. The subset
 // only contains instances, that match the selector.
-func (instances Instances) Select(selector Selector) Instances {
+func (instances Instances) Select(selector InstanceSelector) Instances {
 	result := Instances{}
 	for _, i := range instances {
 		if selector(&i) {
-			result = append(result, i)
-		}
-	}
-	return result
-}
-
-// Filter returns a subset of the instances based on the selector. The subset
-// only contains instances, that do not match the selector.
-func (instances Instances) Filter(selector Selector) Instances {
-	result := Instances{}
-	for _, i := range instances {
-		if !selector(&i) {
-			result = append(result, i)
-		}
-	}
-	return result
-}
-
-// FilterByAnyPod returns a subset of the instances based on the Pod selector.
-// The subset only contains instances that do not contain a single Pod which
-// matches the given selector.
-func (instances Instances) FilterByAnyPod(selector PodSelector) Instances {
-	result := Instances{}
-	for _, i := range instances {
-		if len(i.Pods.Select(selector)) == 0 {
-			result = append(result, i)
-		}
-	}
-	return result
-}
-
-// FilterByAllPods returns a subset of the instances based on the Pod
-// selector. The subset only contains instances that only contain Pods which
-// matche the given selector.
-func (instances Instances) FilterByAllPods(selector PodSelector) Instances {
-	result := Instances{}
-	for _, i := range instances {
-		if len(i.Pods.Filter(selector)) == 0 {
 			result = append(result, i)
 		}
 	}

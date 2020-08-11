@@ -29,7 +29,7 @@ func TestSortInstanceByEC2State(t *testing.T) {
 		})
 	}
 
-	instances.Sort(collectors.ByEC2State)
+	instances.Sort(collectors.InstancesByEC2State)
 
 	statesSorted := []string{}
 	for _, instance := range instances {

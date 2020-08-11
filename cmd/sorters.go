@@ -9,10 +9,10 @@ import (
 
 func SortInstances(instances collectors.Instances) {
 	instances.
-		Sort(collectors.ByInstanceID).
-		Sort(collectors.ByLaunchTime).
-		Sort(collectors.ByEC2State).
-		SortReverse(collectors.ByTriggeredAt)
+		Sort(collectors.InstancesByID).
+		Sort(collectors.InstancesByLaunchTime).
+		Sort(collectors.InstancesByEC2State).
+		SortReverse(collectors.InstancesByTriggeredAt)
 }
 
 func SortPods(pods collectors.Pods) {
@@ -21,41 +21,36 @@ func SortPods(pods collectors.Pods) {
 		Sort(collectors.PodsByImmuneToEviction)
 }
 
-func SelectInstancesThatNeedLifecycleCompletion(instances collectors.Instances) collectors.Instances {
-	return instances.
+func InstancesThatNeedLifecycleCompletion() collectors.InstanceSelector {
+	return collectors.InstanceQuery().
 		Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
 		Select(collectors.PendingLifecycleCompletion).
 		FilterByAllPods(collectors.PodImmuneToEviction)
 }
 
-func SelectInstancesThanNeedLifecycleDeletion(instances collectors.Instances) collectors.Instances {
-	return instances.Select(InstancesThanNeedLifecycleDeletion())
+func InstancesThanNeedLifecycleDeletion() collectors.InstanceSelector {
+	return collectors.InstanceQuery().
+		Filter(collectors.HasEC2Data).
+		Select(collectors.HasASGData).
+		Filter(collectors.LifecycleDeleted).
+		Select(collectors.LifecycleTriggeredOlderThan(time.Hour))
 }
 
-func InstancesThanNeedLifecycleDeletion() collectors.Selector {
-	return collectors.InstanceOperatorAnd(
-		collectors.InstanceOperatorNot(collectors.HasEC2Data),
-		collectors.HasASGData,
-		collectors.InstanceOperatorNot(collectors.LifecycleDeleted),
-		collectors.LifecycleTriggeredOlderThan(time.Hour),
-	)
-}
-
-func SelectInstancesThatWantShutdown(instances collectors.Instances) collectors.Instances {
-	return instances.
+func InstancesThatWantShutdown() collectors.InstanceSelector {
+	return collectors.InstanceQuery().
 		Select(collectors.HasEC2Data).
 		Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
 		Select(collectors.PendingLifecycleCompletion)
 }
 
-func SelectPodsThatNeedEviction(pods collectors.Pods) collectors.Pods {
-	return pods.
+func PodsThatNeedEviction() collectors.PodSelector {
+	return collectors.PodQuery().
 		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
 		Filter(collectors.PodImmuneToEviction)
 }
 
-func SelectPodsReadyForEviction(pods collectors.Pods) collectors.Pods {
-	return pods.
+func PodsReadyForEviction() collectors.PodSelector {
+	return collectors.PodQuery().
 		SelectByInstance(InstancesThanNeedLifecycleDeletion()).
 		Filter(collectors.PodImmuneToEviction).
 		Select(collectors.PodCanDecrement)

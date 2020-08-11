@@ -18,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
@@ -65,24 +64,24 @@ type Instance struct {
 }
 
 type cacheValue struct {
-	MessageId     string
-	ReceiptHandle string
-	Body          messageBody
-	completed     bool
-	deletedAt     time.Time
+	MessageId     string      `logfield:"message-id"`
+	ReceiptHandle string      `logfield:"receipt-handle"`
+	Body          messageBody `logfield:",squash"`
+	completed     bool        `logfield:"completed"`
+	deletedAt     time.Time   `logfield:"deleted-at"`
 }
 
 // messageBody is used for decoding JSON from the SQS messages.
 type messageBody struct {
-	LifecycleHookName    string
+	LifecycleHookName    string `logfield:"lifecycle-hook-name"`
 	AccountId            string
-	RequestId            string
+	RequestId            string `logfield:"request-id"`
 	LifecycleTransition  string
-	AutoScalingGroupName string
+	AutoScalingGroupName string `logfield:"autoscaling-group-name"`
 	Service              string
-	Time                 time.Time
-	EC2InstanceId        string
-	LifecycleActionToken string
+	Time                 time.Time `logfield:"triggered-at"`
+	EC2InstanceId        string    `logfield:"instance-id,omitempty"`
+	LifecycleActionToken string    `logfield:"lifecycle-action-token"`
 	Event                string
 }
 
@@ -200,21 +199,18 @@ func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
 		ReceiptHandle: aws.StringValue(message.ReceiptHandle),
 	}
 
-	ctx = logutil.WithField(ctx, "message-id", aws.StringValue(message.MessageId))
+	ctx = logutil.WithFields(ctx, logutil.FromStruct(cacheItem))
 
-	logutil.Get(ctx).Debugf("got message: %s", aws.StringValue(message.Body))
+	logutil.Get(ctx).
+		WithField("message-body", aws.StringValue(message.Body)).
+		Debugf("got asg lifecycle message")
 
 	err := json.Unmarshal([]byte(aws.StringValue(message.Body)), &cacheItem.Body)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode message body")
 	}
 
-	ctx = logutil.WithFields(ctx, logrus.Fields{
-		"asg-name":     cacheItem.Body.AutoScalingGroupName,
-		"message-time": cacheItem.Body.Time,
-		"transistion":  cacheItem.Body.LifecycleTransition,
-		"instance-id":  cacheItem.Body.EC2InstanceId,
-	})
+	ctx = logutil.WithFields(ctx, logutil.FromStruct(cacheItem))
 
 	if cacheItem.Body.Event == "autoscaling:TEST_NOTIFICATION" {
 		logutil.Get(ctx).Info("Skipping autoscaling:TEST_NOTIFICATION event")

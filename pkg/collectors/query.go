@@ -5,7 +5,7 @@ package collectors
 // correct.
 //
 // Without:
-//    Selector(HasEC2Data).
+//    InstanceSelector(HasEC2Data).
 //        Select(HasASGData).
 //        Filter(LifecycleDeleted)
 // With:
@@ -13,26 +13,26 @@ package collectors
 //        Select(HasEC2Data).
 //        Select(HasASGData).
 //        Filter(LifecycleDeleted)
-func InstanceQuery() Selector {
+func InstanceQuery() InstanceSelector {
 	return func(i *Instance) bool {
 		return true
 	}
 }
 
-func (s1 Selector) Select(s2 Selector) Selector {
-	return Selector(func(i *Instance) bool {
+func (s1 InstanceSelector) Select(s2 InstanceSelector) InstanceSelector {
+	return InstanceSelector(func(i *Instance) bool {
 		return s1(i) && s2(i)
 	})
 }
 
-func (s1 Selector) Filter(s2 Selector) Selector {
-	return Selector(func(i *Instance) bool {
+func (s1 InstanceSelector) Filter(s2 InstanceSelector) InstanceSelector {
+	return InstanceSelector(func(i *Instance) bool {
 		return s1(i) && !s2(i)
 	})
 }
 
-func (is Selector) FilterByAllPods(ps PodSelector) Selector {
-	return Selector(func(i *Instance) bool {
+func (is InstanceSelector) FilterByAllPods(ps PodSelector) InstanceSelector {
+	return InstanceSelector(func(i *Instance) bool {
 		if !is(i) {
 			return false
 		}
@@ -68,7 +68,7 @@ func (ps1 PodSelector) Filter(ps2 PodSelector) PodSelector {
 	}
 }
 
-func (ps PodSelector) SelectByInstance(is Selector) PodSelector {
+func (ps PodSelector) SelectByInstance(is InstanceSelector) PodSelector {
 	return func(p *Pod) bool {
 		return ps(p) && is(&p.Instance)
 	}

@@ -109,7 +109,7 @@ func (instances Instances) SortReverse(by By) Instances {
 
 // Select returns a subset of the instances based on the selector. The subset
 // only contains instances, that match the selector.
-func (instances Instances) Select(selector Selector) Instances {
+func (instances Instances) Select(selector InstanceSelector) Instances {
 	result := Instances{}
 	for _, i := range instances {
 		if selector(&i) {

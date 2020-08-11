@@ -71,39 +71,14 @@ func (pods Pods) SortReverse(by PodsBy) Pods {
 	return pods
 }
 
-func (pods Pods) Split(selector PodSelector) (Pods, Pods) {
-	var (
-		yay = Pods{}
-		ney = Pods{}
-	)
+func (pods Pods) Select(selector PodSelector) Pods {
+	result := Pods{}
 
 	for _, p := range pods {
 		if selector(&p) {
-			yay = append(yay, p)
-		} else {
-			ney = append(ney, p)
-		}
-	}
-
-	return yay, ney
-}
-
-func (pods Pods) Select(selector PodSelector) Pods {
-	result, _ := pods.Split(selector)
-	return result
-}
-
-func (pods Pods) Filter(selector PodSelector) Pods {
-	_, result := pods.Split(selector)
-	return result
-}
-
-func (pods Pods) SelectByInstance(selector Selector) Pods {
-	result := Pods{}
-	for _, p := range pods {
-		if selector(&p.Instance) {
 			result = append(result, p)
 		}
 	}
+
 	return result
 }

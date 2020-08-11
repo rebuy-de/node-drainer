@@ -9,10 +9,10 @@ import (
 
 func SortInstances(instances collectors.Instances) {
 	instances.
-		Sort(collectors.ByInstanceID).
-		Sort(collectors.ByLaunchTime).
-		Sort(collectors.ByEC2State).
-		SortReverse(collectors.ByTriggeredAt)
+		Sort(collectors.InstancesByID).
+		Sort(collectors.InstancesByLaunchTime).
+		Sort(collectors.InstancesByEC2State).
+		SortReverse(collectors.InstancesByTriggeredAt)
 }
 
 func SortPods(pods collectors.Pods) {

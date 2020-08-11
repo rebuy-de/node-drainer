@@ -89,7 +89,7 @@ func (instance Instance) PodStats() InstancePodStats {
 type Instances []Instance
 
 // Sort returns a sorted list of instances based on the given sorter.
-func (instances Instances) Sort(by By) Instances {
+func (instances Instances) Sort(by InstancesBy) Instances {
 	sort.SliceStable(instances, func(i, j int) bool {
 		return by(&instances[i], &instances[j])
 	})
@@ -99,7 +99,7 @@ func (instances Instances) Sort(by By) Instances {
 
 // SortReverse returns a sorted list of instances based on the given sorter.
 // The output is reversed.
-func (instances Instances) SortReverse(by By) Instances {
+func (instances Instances) SortReverse(by InstancesBy) Instances {
 	sort.SliceStable(instances, func(i, j int) bool {
 		return !by(&instances[i], &instances[j])
 	})

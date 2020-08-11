@@ -106,7 +106,7 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 
 	instances, pods := collectors.Combine(l.collectors.List(ctx))
 	instances = instances.
-		Sort(collectors.ByLaunchTime).SortReverse(collectors.ByTriggeredAt)
+		Sort(collectors.InstancesByLaunchTime).SortReverse(collectors.InstancesByTriggeredAt)
 
 	InstMainLoopStarted(ctx, instances, pods)
 

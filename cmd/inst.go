@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"path"
 	"time"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
@@ -29,6 +30,7 @@ func InitIntrumentation(ctx context.Context) context.Context {
 	ctx = instutil.NewCounter(ctx, metricMainLoopIterations)
 	ctx = instutil.NewGauge(ctx, metricMainLoopPendingInstances)
 	ctx = instutil.NewGaugeVec(ctx, metricMainLoopPodStats, "name")
+	ctx = instutil.NewTransitionCollector(ctx, "pod-eviction")
 
 	// Register the already known label values, so Prometheus starts with 0 and
 	// not 1 and properly calculates rates.
@@ -93,6 +95,24 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 			Debugf("there are %d pods that want eviction (%d ready, %d unready)",
 				len(podsThatWantEviction), len(podsReadyForEviction), len(podsUnreadyForEviction),
 			)
+	}
+
+	tc := instutil.GetTransitionCollector(ctx, "pod-eviction")
+	for _, pod := range podsThatWantEviction {
+		name := path.Join(pod.Namespace, pod.Name)
+
+		switch {
+		case PodsReadyForEviction()(&pod):
+			tc.Observe(name, "eviction-ready", logutil.FromStruct(pod))
+		case PodsUnreadyForEviction()(&pod):
+			tc.Observe(name, "eviction-unready", logutil.FromStruct(pod))
+		}
+	}
+	for _, transition := range tc.Finish() {
+		logutil.Get(ctx).
+			WithFields(transition.Fields).
+			Infof("pod %s changed state from '%s' to '%s'",
+				transition.Name, transition.From, transition.To)
 	}
 
 	// Log changed instance states

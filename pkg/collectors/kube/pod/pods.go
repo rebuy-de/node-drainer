@@ -10,6 +10,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
+	policy "k8s.io/api/policy/v1beta1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -58,6 +60,9 @@ type Client interface {
 
 	// Healthy indicates whether the background job is running correctly.
 	Healthy() bool
+
+	// Evict deletes a pod.
+	Evict(context.Context, *Pod) error
 }
 
 type client struct {
@@ -165,4 +170,31 @@ func (c *client) Run(ctx context.Context) error {
 	run("Deployments", c.deploy.Informer())
 
 	return errors.WithStack(egrp.Wait())
+}
+
+func (c *client) Evict(ctx context.Context, pod *Pod) error {
+	if pod == nil {
+		return errors.Errorf("cannot delete nil pod")
+	}
+
+	// Do an additional sanity check of CanDecrement. Just to be sure.
+	if !pod.OwnerReady.CanDecrement {
+		return errors.Errorf("cannot delete nil pod")
+	}
+
+	if pod.Namespace == "" {
+		return errors.Errorf("missing namespace")
+	}
+
+	if pod.Name == "" {
+		return errors.Errorf("missing name")
+	}
+
+	err := c.kube.CoreV1().Pods(pod.Namespace).Evict(ctx, &policy.Eviction{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      pod.Name,
+			Namespace: pod.Namespace,
+		},
+	})
+	return errors.Wrap(err, "failed to evict pod")
 }

@@ -14,7 +14,6 @@ import (
 // changes, it starts a new update loop and checks whether an action is
 // required.
 type MainLoop struct {
-	stateCache  map[string]string
 	triggerLoop *syncutil.SignalEmitter
 	signaler    syncutil.Signaler
 
@@ -27,7 +26,6 @@ type MainLoop struct {
 func NewMainLoop(collectors collectors.Collectors) *MainLoop {
 	ml := new(MainLoop)
 
-	ml.stateCache = map[string]string{}
 	ml.collectors = collectors
 	ml.triggerLoop = new(syncutil.SignalEmitter)
 
@@ -136,6 +134,15 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to delete message")
 		}
+
+		l.triggerLoop.Emit()
+		return nil
+	}
+
+	for _, pod := range pods.Select(PodsReadyForEviction()) {
+		InstMainLoopEvictPod(ctx, pod)
+
+		l.collectors.Pod.Evict(ctx, &pod.Pod)
 
 		l.triggerLoop.Emit()
 		return nil

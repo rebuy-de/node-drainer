@@ -19,6 +19,14 @@ type OwnerReadyReason struct {
 func (c *client) getOwner(ctx context.Context, pod *v1.Pod) (*meta_v1.OwnerReference, OwnerReadyReason) {
 	owner := meta_v1.GetControllerOf(pod)
 
+	if pod.ObjectMeta.DeletionTimestamp != nil {
+		return owner, OwnerReadyReason{
+			CanDecrement: false,
+			Short:        "AlreadyTerminating",
+			Reason:       "Pod is already in termination process.",
+		}
+	}
+
 	ownerKind := ""
 	if owner != nil {
 		ownerKind = owner.Kind

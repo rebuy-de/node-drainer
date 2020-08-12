@@ -12,11 +12,13 @@ import (
 )
 
 const (
-	metricMainLoopActions          = "mainloop_actions_total"
-	metricMainLoopDrainDuration    = "mainloop_drain_duration"
-	metricMainLoopIterations       = "mainloop_iterations_total"
-	metricMainLoopPendingInstances = "mainloop_pending_instances"
-	metricMainLoopPodStats         = "mainloop_pod_stats"
+	metricMainLoopActions                  = "mainloop_actions_total"
+	metricMainLoopDrainDuration            = "mainloop_drain_duration"
+	metricMainLoopInstanceStateTransitions = "mainloop_instance_state_transitions_total"
+	metricMainLoopIterations               = "mainloop_iterations_total"
+	metricMainLoopPendingInstances         = "mainloop_pending_instances"
+	metricMainLoopPodStats                 = "mainloop_pod_stats"
+	metricMainLoopPodTransitions           = "mainloop_pod_transitions_total"
 )
 
 func InitIntrumentation(ctx context.Context) context.Context {
@@ -26,8 +28,12 @@ func InitIntrumentation(ctx context.Context) context.Context {
 	ctx = instutil.NewCounter(ctx, metricMainLoopIterations)
 	ctx = instutil.NewGauge(ctx, metricMainLoopPendingInstances)
 	ctx = instutil.NewGaugeVec(ctx, metricMainLoopPodStats, "name")
-	ctx = instutil.NewTransitionCollector(ctx, "pod-eviction")
-	ctx = instutil.NewTransitionCollector(ctx, "instance-state")
+
+	ctx = instutil.NewCounterVec(ctx, metricMainLoopPodTransitions, "from", "to")
+	ctx = instutil.NewCounterVec(ctx, metricMainLoopInstanceStateTransitions, "from", "to")
+
+	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopPodTransitions)
+	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopInstanceStateTransitions)
 
 	// Register the already known label values, so Prometheus starts with 0 and
 	// not 1 and properly calculates rates.
@@ -91,7 +97,8 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 			)
 	}
 
-	tcp := instutil.GetTransitionCollector(ctx, "pod-eviction")
+	// Log pod changes
+	tcp := instutil.GetTransitionCollector(ctx, metricMainLoopPodTransitions)
 	for _, pod := range podsThatWantEviction {
 		name := path.Join(pod.Namespace, pod.Name)
 
@@ -107,10 +114,15 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 			WithFields(transition.Fields).
 			Infof("pod %s changed state: [ %s -> %s ]",
 				transition.Name, transition.From, transition.To)
+
+		cv, ok := instutil.CounterVec(ctx, metricMainLoopPodTransitions)
+		if ok {
+			cv.WithLabelValues(transition.From, transition.To).Inc()
+		}
 	}
 
 	// Log instance state changes
-	tci := instutil.GetTransitionCollector(ctx, "instance-state")
+	tci := instutil.GetTransitionCollector(ctx, metricMainLoopInstanceStateTransitions)
 	for _, instance := range instances {
 		tci.Observe(instance.InstanceID, instance.EC2.State, logutil.FromStruct(instance))
 	}
@@ -120,6 +132,11 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 
 		logger.Infof("instance %s changed state: [ %s -> %s ]",
 			transition.Name, transition.From, transition.To)
+
+		cv, ok := instutil.CounterVec(ctx, metricMainLoopInstanceStateTransitions)
+		if ok {
+			cv.WithLabelValues(transition.From, transition.To).Inc()
+		}
 
 		instance := instances.Get(transition.Name)
 		if instance != nil && transition.To == ec2.InstanceStateTerminated {

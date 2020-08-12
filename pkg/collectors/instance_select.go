@@ -32,3 +32,14 @@ func LifecycleDeleted(i *Instance) bool {
 func LifecycleCompleted(i *Instance) bool {
 	return i.ASG.Completed
 }
+
+func HasTaint(key string) InstanceSelector {
+	return func(i *Instance) bool {
+		for _, taint := range i.Node.Taints {
+			if taint.Key == key {
+				return true
+			}
+		}
+		return false
+	}
+}

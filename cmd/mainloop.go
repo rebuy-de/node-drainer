@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 )
@@ -107,6 +108,18 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		Sort(collectors.InstancesByLaunchTime).SortReverse(collectors.InstancesByTriggeredAt)
 
 	InstMainLoopStarted(ctx, instances, pods)
+
+	for _, instance := range instances.Select(InstancesThatNeedCordon()) {
+		InstMainLoopCordoningInstance(ctx, instance)
+
+		err := l.collectors.Node.Taint(ctx, instance.Node, TaintSoft, node.TaintEffectNoSchedule)
+		if err != nil {
+			return errors.Wrap(err, "failed to apply soft taint")
+		}
+
+		l.triggerLoop.Emit()
+		return nil
+	}
 
 	for _, instance := range instances.Select(InstancesThatNeedLifecycleCompletion()) {
 		InstMainLoopCompletingInstance(ctx, instance)

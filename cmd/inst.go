@@ -196,6 +196,17 @@ func InstMainLoopCompletingInstance(ctx context.Context, instance collectors.Ins
 	}
 }
 
+func InstMainLoopCordoningInstance(ctx context.Context, instance collectors.Instance) {
+	logutil.Get(ctx).
+		WithFields(logutil.FromStruct(instance)).
+		Info("applying soft taint on instance (cordon)")
+
+	c, ok := instutil.CounterVec(ctx, metricMainLoopActions)
+	if ok {
+		c.WithLabelValues("soft-taint").Inc()
+	}
+}
+
 func InstMainLoopDeletingLifecycleMessage(ctx context.Context, instance collectors.Instance) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).

@@ -91,6 +91,15 @@ func (instance Instance) PodStats() InstancePodStats {
 // Instances is a collection of Instance types with some additional functions.
 type Instances []Instance
 
+func (instances Instances) Get(instanceID string) *Instance {
+	for _, instance := range instances {
+		if instance.InstanceID == instanceID {
+			return &instance
+		}
+	}
+	return nil
+}
+
 // Sort returns a sorted list of instances based on the given sorter.
 func (instances Instances) Sort(by InstancesBy) Instances {
 	sort.SliceStable(instances, func(i, j int) bool {

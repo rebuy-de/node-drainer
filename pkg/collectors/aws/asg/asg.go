@@ -226,7 +226,7 @@ func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
 	_, exists := h.cache[id]
 
 	if !exists {
-		logutil.Get(ctx).Info("adding instance to cache")
+		logutil.Get(ctx).Info("received new ASG lifecycle message")
 		h.cache[id] = &cacheItem
 		h.emitter.Emit()
 	}

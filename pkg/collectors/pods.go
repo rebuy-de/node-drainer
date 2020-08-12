@@ -8,8 +8,8 @@ import (
 )
 
 type Pod struct {
-	Instance
-	pod.Pod
+	Instance `logfield:",squash"`
+	pod.Pod  `logfield:",squash"`
 }
 
 // Deprecated: Should use filters instead.

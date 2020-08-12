@@ -24,10 +24,10 @@ type Pod struct {
 	Namespace string `logfield:"pod-namespace"`
 	NodeName  string `logfield:"node-name"`
 
-	AppName      string `logfield:"-"`
-	AppInstance  string `logfield:"-"`
-	AppVersion   string `logfield:"-"`
-	AppComponent string `logfield:"-"`
+	AppName      string `logfield:"app-name"`
+	AppInstance  string `logfield:"app-instance"`
+	AppVersion   string `logfield:"app-version"`
+	AppComponent string `logfield:"app-component"`
 
 	OwnerKind   string           `logfield:"pod-owner-kind"`
 	OwnerName   string           `logfield:"pod-owner-name"`

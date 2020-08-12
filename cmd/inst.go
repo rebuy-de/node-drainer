@@ -19,10 +19,6 @@ const (
 	metricMainLoopPodStats         = "mainloop_pod_stats"
 )
 
-type instCacheKey string
-
-const instCacheKeyStates instCacheKey = "ec2-instance-state-cache"
-
 func InitIntrumentation(ctx context.Context) context.Context {
 	ctx = instutil.NewCounterVec(ctx, metricMainLoopActions, "action")
 	ctx = instutil.NewHistogram(ctx, metricMainLoopDrainDuration,
@@ -31,6 +27,7 @@ func InitIntrumentation(ctx context.Context) context.Context {
 	ctx = instutil.NewGauge(ctx, metricMainLoopPendingInstances)
 	ctx = instutil.NewGaugeVec(ctx, metricMainLoopPodStats, "name")
 	ctx = instutil.NewTransitionCollector(ctx, "pod-eviction")
+	ctx = instutil.NewTransitionCollector(ctx, "instance-state")
 
 	// Register the already known label values, so Prometheus starts with 0 and
 	// not 1 and properly calculates rates.
@@ -48,9 +45,6 @@ func InitIntrumentation(ctx context.Context) context.Context {
 		gv.WithLabelValues("eviction-ready").Add(0)
 		gv.WithLabelValues("eviction-unready").Add(0)
 	}
-
-	cache := map[string]string{}
-	ctx = context.WithValue(ctx, instCacheKeyStates, &cache)
 
 	return ctx
 }
@@ -97,56 +91,44 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 			)
 	}
 
-	tc := instutil.GetTransitionCollector(ctx, "pod-eviction")
+	tcp := instutil.GetTransitionCollector(ctx, "pod-eviction")
 	for _, pod := range podsThatWantEviction {
 		name := path.Join(pod.Namespace, pod.Name)
 
 		switch {
 		case PodsReadyForEviction()(&pod):
-			tc.Observe(name, "eviction-ready", logutil.FromStruct(pod))
+			tcp.Observe(name, "eviction-ready", logutil.FromStruct(pod))
 		case PodsUnreadyForEviction()(&pod):
-			tc.Observe(name, "eviction-unready", logutil.FromStruct(pod))
+			tcp.Observe(name, "eviction-unready", logutil.FromStruct(pod))
 		}
 	}
-	for _, transition := range tc.Finish() {
+	for _, transition := range tcp.Finish() {
 		logutil.Get(ctx).
 			WithFields(transition.Fields).
-			Infof("pod %s changed state from '%s' to '%s'",
+			Infof("pod %s changed state: [ %s -> %s ]",
 				transition.Name, transition.From, transition.To)
 	}
 
-	// Log changed instance states
-	cache, ok := ctx.Value(instCacheKeyStates).(*map[string]string)
-	if ok {
-		for _, instance := range instances {
-			logger := logutil.Get(ctx).
-				WithFields(logutil.FromStruct(instance))
+	// Log instance state changes
+	tci := instutil.GetTransitionCollector(ctx, "instance-state")
+	for _, instance := range instances {
+		tci.Observe(instance.InstanceID, instance.EC2.State, logutil.FromStruct(instance))
+	}
+	for _, transition := range tci.Finish() {
+		logger := logutil.Get(ctx).
+			WithFields(transition.Fields)
 
-			currState := instance.EC2.State
-			prevState := (*cache)[instance.InstanceID]
+		logger.Infof("instance %s changed state: [ %s -> %s ]",
+			transition.Name, transition.From, transition.To)
 
-			(*cache)[instance.InstanceID] = currState
+		instance := instances.Get(transition.Name)
+		if instance != nil && transition.To == ec2.InstanceStateTerminated {
+			duration := instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt)
+			logger.Infof("instance drainage took %v", duration)
 
-			if currState == prevState {
-				continue
-			}
-
-			if prevState == "" {
-				// It means there is no previous state. This might happen
-				// after a restart.
-				continue
-			}
-
-			logger.Infof("instance state changed from '%s' to '%s'", prevState, currState)
-
-			if currState == ec2.InstanceStateTerminated {
-				duration := instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt)
-				logger.Infof("instance drainage took %v", duration)
-
-				m, ok := instutil.Histogram(ctx, metricMainLoopDrainDuration)
-				if ok {
-					m.Observe(duration.Seconds())
-				}
+			m, ok := instutil.Histogram(ctx, metricMainLoopDrainDuration)
+			if ok {
+				m.Observe(duration.Seconds())
 			}
 		}
 	}

@@ -6,10 +6,12 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 	"github.com/sirupsen/logrus"
 
 	v1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
@@ -17,11 +19,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	TaintEffectNoSchedule = v1.TaintEffectNoSchedule
+	TaintEffectNoExecute  = v1.TaintEffectNoExecute
+)
+
+type Taint = v1.Taint
+
 type Node struct {
-	InstanceID    string     `logfield:"instance-id,omitempty"`
-	NodeName      string     `logfield:"node-name,omitempty"`
-	Unschedulable bool       `logfield:"node-unschedulable"`
-	Taints        []v1.Taint `logfield:"node-taints"`
+	InstanceID    string  `logfield:"instance-id,omitempty"`
+	NodeName      string  `logfield:"node-name,omitempty"`
+	Unschedulable bool    `logfield:"node-unschedulable"`
+	Taints        []Taint `logfield:"node-taints"`
 }
 
 type Client interface {
@@ -39,6 +48,8 @@ type Client interface {
 
 	// Healthy indicates whether the background job is running correctly.
 	Healthy() bool
+
+	Taint(context.Context, Node, string, v1.TaintEffect) error
 }
 
 type client struct {
@@ -108,4 +119,28 @@ func (c *client) Run(ctx context.Context) error {
 	defer runtime.HandleCrash()
 	c.nodes.Informer().Run(ctx.Done())
 	return nil
+}
+
+func (c *client) Taint(ctx context.Context, node Node, key string, effect v1.TaintEffect) error {
+	if node.NodeName == "" {
+		return errors.Errorf("got node with empty name")
+	}
+
+	taint := v1.Taint{
+		Key:    key,
+		Value:  "Exists",
+		Effect: effect,
+	}
+
+	// We are not getting the node from cache, because it should be as fresh as
+	// possible. Also we need to avoid that the append affects the cache.
+	upstream, err := c.kube.CoreV1().Nodes().Get(ctx, node.NodeName, meta.GetOptions{})
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	upstream.Spec.Taints = append(upstream.Spec.Taints, taint)
+
+	_, err = c.kube.CoreV1().Nodes().Update(ctx, upstream, meta.UpdateOptions{})
+	return errors.WithStack(err)
 }

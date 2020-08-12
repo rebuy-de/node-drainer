@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
 )
@@ -14,7 +15,6 @@ import (
 // changes, it starts a new update loop and checks whether an action is
 // required.
 type MainLoop struct {
-	stateCache  map[string]string
 	triggerLoop *syncutil.SignalEmitter
 	signaler    syncutil.Signaler
 
@@ -27,7 +27,6 @@ type MainLoop struct {
 func NewMainLoop(collectors collectors.Collectors) *MainLoop {
 	ml := new(MainLoop)
 
-	ml.stateCache = map[string]string{}
 	ml.collectors = collectors
 	ml.triggerLoop = new(syncutil.SignalEmitter)
 
@@ -110,6 +109,18 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 
 	InstMainLoopStarted(ctx, instances, pods)
 
+	for _, instance := range instances.Select(InstancesThatNeedCordon()) {
+		InstMainLoopCordoningInstance(ctx, instance)
+
+		err := l.collectors.Node.Taint(ctx, instance.Node, TaintSoft, node.TaintEffectNoSchedule)
+		if err != nil {
+			return errors.Wrap(err, "failed to apply soft taint")
+		}
+
+		l.triggerLoop.Emit()
+		return nil
+	}
+
 	for _, instance := range instances.Select(InstancesThatNeedLifecycleCompletion()) {
 		InstMainLoopCompletingInstance(ctx, instance)
 
@@ -136,6 +147,15 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to delete message")
 		}
+
+		l.triggerLoop.Emit()
+		return nil
+	}
+
+	for _, pod := range pods.Select(PodsReadyForEviction()) {
+		InstMainLoopEvictPod(ctx, pod)
+
+		l.collectors.Pod.Evict(ctx, &pod.Pod)
 
 		l.triggerLoop.Emit()
 		return nil

@@ -10,6 +10,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/testdata"
 )
@@ -186,7 +187,7 @@ func TestPodSelectors(t *testing.T) {
 		}
 
 		podCanDecrement = pod.Pod{
-			Name:      "doobar",
+			Name:      "foobar",
 			Namespace: "default",
 			OwnerKind: "Imaginary",
 			OwnerReady: pod.OwnerReadyReason{
@@ -194,11 +195,20 @@ func TestPodSelectors(t *testing.T) {
 			},
 		}
 		podCannotDecrement = pod.Pod{
-			Name:      "doobar",
+			Name:      "foobar",
 			Namespace: "default",
 			OwnerKind: "Imaginary",
 			OwnerReady: pod.OwnerReadyReason{
 				CanDecrement: false,
+			},
+		}
+
+		nodeSoftTaint = node.Node{
+			InstanceID: instanceID,
+			Taints: []node.Taint{
+				node.Taint{
+					Key: `rebuy.com/node-drainer-soft-shutdown`,
+				},
 			},
 		}
 	)
@@ -234,6 +244,7 @@ func TestPodSelectors(t *testing.T) {
 				Instance: collectors.Instance{
 					InstanceID: instanceID,
 					EC2:        ec2Running,
+					Node:       nodeSoftTaint,
 				},
 			},
 		},
@@ -242,6 +253,23 @@ func TestPodSelectors(t *testing.T) {
 			want: wantCase{
 				evictionWant:    true,
 				evictionReady:   true,
+				evictionUnready: false,
+			},
+			pod: collectors.Pod{
+				Pod: podCanDecrement,
+				Instance: collectors.Instance{
+					InstanceID: instanceID,
+					EC2:        ec2Running,
+					ASG:        asgC0D0,
+					Node:       nodeSoftTaint,
+				},
+			},
+		},
+		{
+			name: "instance-soft-taint-missing",
+			want: wantCase{
+				evictionWant:    false,
+				evictionReady:   false,
 				evictionUnready: false,
 			},
 			pod: collectors.Pod{
@@ -266,6 +294,7 @@ func TestPodSelectors(t *testing.T) {
 					InstanceID: instanceID,
 					EC2:        ec2Running,
 					ASG:        asgC0D0,
+					Node:       nodeSoftTaint,
 				},
 			},
 		},
@@ -282,6 +311,7 @@ func TestPodSelectors(t *testing.T) {
 					InstanceID: instanceID,
 					EC2:        ec2Terminating,
 					ASG:        asgC0D0,
+					Node:       nodeSoftTaint,
 				},
 			},
 		},
@@ -298,6 +328,7 @@ func TestPodSelectors(t *testing.T) {
 					InstanceID: instanceID,
 					EC2:        ec2Running,
 					ASG:        asgC1D0,
+					Node:       nodeSoftTaint,
 				},
 			},
 		},

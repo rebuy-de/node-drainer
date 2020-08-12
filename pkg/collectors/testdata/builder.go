@@ -41,6 +41,7 @@ const (
 	NodeMissing       NodeState = ""
 	NodeSchedulable   NodeState = "schedulable"
 	NodeUnschedulable NodeState = "unschedulable"
+	NodeSoftTaint     NodeState = "soft-taint"
 )
 
 type ASGState string
@@ -219,6 +220,13 @@ func (b *Builder) buildInstances(result collectors.Lists) collectors.Lists {
 					Effect: "NoSchedule",
 				})
 
+			}
+
+			if template.Node == NodeSoftTaint {
+				node.Taints = append(node.Taints, v1.Taint{
+					Key:    "rebuy.com/node-drainer/soft-shutdown",
+					Effect: "NoSchedule",
+				})
 			}
 
 			result.Nodes = append(result.Nodes, node)

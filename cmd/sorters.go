@@ -7,6 +7,11 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 )
 
+const (
+	TaintSoft = `rebuy.com/node-drainer-soft-shutdown`
+	TaintHard = `rebuy.com/node-drainer-hard-shutdown`
+)
+
 func SortInstances(instances collectors.Instances) {
 	instances.
 		Sort(collectors.InstancesByID).
@@ -44,9 +49,21 @@ func InstancesThatWantShutdown() collectors.InstanceSelector {
 		Filter(collectors.LifecycleCompleted)
 }
 
+func InstancesThatNeedCordon() collectors.InstanceSelector {
+	return collectors.InstanceQuery().
+		Select(InstancesThatWantShutdown()).
+		Filter(collectors.HasTaint(TaintSoft))
+}
+
+func InstancesReadyForEviction() collectors.InstanceSelector {
+	return collectors.InstanceQuery().
+		Select(InstancesThatWantShutdown()).
+		Select(collectors.HasTaint(TaintSoft))
+}
+
 func PodsThatWantEviction() collectors.PodSelector {
 	return collectors.PodQuery().
-		SelectByInstance(InstancesThatWantShutdown()).
+		SelectByInstance(InstancesReadyForEviction()).
 		Filter(collectors.PodImmuneToEviction)
 }
 

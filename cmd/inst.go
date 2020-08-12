@@ -52,6 +52,30 @@ func InitIntrumentation(ctx context.Context) context.Context {
 		gv.WithLabelValues("eviction-unready").Add(0)
 	}
 
+	cv, ok := instutil.GaugeVec(ctx, metricMainLoopPodTransitions)
+	if ok {
+		values := []string{"", "eviction-ready", "eviction-unready"}
+		for _, from := range values {
+			for _, to := range values {
+				cv.WithLabelValues(from, to).Add(0)
+			}
+		}
+	}
+
+	cv, ok = instutil.GaugeVec(ctx, metricMainLoopInstanceStateTransitions)
+	if ok {
+		values := []string{
+			ec2.InstanceStateRunning,
+			ec2.InstanceStateTerminated,
+			ec2.InstanceStateShuttingDown,
+		}
+		for _, from := range values {
+			for _, to := range values {
+				cv.WithLabelValues(from, to).Add(0)
+			}
+		}
+	}
+
 	return ctx
 }
 
@@ -172,6 +196,17 @@ func InstMainLoopCompletingInstance(ctx context.Context, instance collectors.Ins
 	}
 }
 
+func InstMainLoopCordoningInstance(ctx context.Context, instance collectors.Instance) {
+	logutil.Get(ctx).
+		WithFields(logutil.FromStruct(instance)).
+		Info("applying soft taint on instance (cordon)")
+
+	c, ok := instutil.CounterVec(ctx, metricMainLoopActions)
+	if ok {
+		c.WithLabelValues("soft-taint").Inc()
+	}
+}
+
 func InstMainLoopDeletingLifecycleMessage(ctx context.Context, instance collectors.Instance) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(instance)).
@@ -193,5 +228,10 @@ func InstMainLoopDeletingLifecycleMessageAgeSanityCheckFailed(ctx context.Contex
 func InstMainLoopEvictPod(ctx context.Context, pod collectors.Pod) {
 	logutil.Get(ctx).
 		WithFields(logutil.FromStruct(pod)).
-		Warnf("would evict pod %s", pod.Name)
+		Warnf("evicting pod %s", pod.Name)
+
+	c, ok := instutil.CounterVec(ctx, metricMainLoopActions)
+	if ok {
+		c.WithLabelValues("evict-pod").Inc()
+	}
 }

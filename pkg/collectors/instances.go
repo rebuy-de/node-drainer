@@ -29,14 +29,17 @@ func (i *Instance) HasASGData() bool {
 	return i != nil && i.ASG.ID != ""
 }
 
+// Deprecated: Should use filters instead.
 func (i *Instance) WantsShutdown() bool {
 	return i.HasASGData() && i.HasEC2Data() && i.EC2.IsRunning()
 }
 
+// Deprecated: Should use filters instead.
 func (i *Instance) PendingLifecycleCompletion() bool {
 	return i.HasASGData() && !i.ASG.Completed
 }
 
+// Deprecated: Should use filters instead.
 func (i *Instance) HasLifecycleMessage() bool {
 	return i.HasASGData() && !i.ASG.Deleted
 }

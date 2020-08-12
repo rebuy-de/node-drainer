@@ -8,6 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/testdata"
 )
 
@@ -156,4 +159,186 @@ func TestSelectInstancesThatWantShutdown(t *testing.T) {
 
 	assert.Contains(t, names, "running_pending")
 	assert.Contains(t, names, "running_only-deleted")
+}
+
+func TestPodSelectors(t *testing.T) {
+	const instanceID = "i-00000000000000000"
+
+	var (
+		ec2Running = ec2.Instance{
+			InstanceID: instanceID,
+			State:      "running",
+		}
+		ec2Terminating = ec2.Instance{
+			InstanceID: instanceID,
+			State:      "terminating",
+		}
+
+		asgC0D0 = asg.Instance{
+			ID:        instanceID,
+			Completed: false,
+			Deleted:   false,
+		}
+		asgC1D0 = asg.Instance{
+			ID:        instanceID,
+			Completed: true,
+			Deleted:   false,
+		}
+
+		podCanDecrement = pod.Pod{
+			Name:      "doobar",
+			Namespace: "default",
+			OwnerKind: "Imaginary",
+			OwnerReady: pod.OwnerReadyReason{
+				CanDecrement: true,
+			},
+		}
+		podCannotDecrement = pod.Pod{
+			Name:      "doobar",
+			Namespace: "default",
+			OwnerKind: "Imaginary",
+			OwnerReady: pod.OwnerReadyReason{
+				CanDecrement: false,
+			},
+		}
+	)
+
+	type wantCase struct {
+		evictionWant    bool
+		evictionReady   bool
+		evictionUnready bool
+	}
+
+	cases := []struct {
+		name string
+		pod  collectors.Pod
+		want wantCase
+	}{
+		{
+			name: "empty",
+			want: wantCase{
+				evictionWant:    false,
+				evictionReady:   false,
+				evictionUnready: false,
+			},
+		},
+		{
+			name: "instance-running",
+			want: wantCase{
+				evictionWant:    false,
+				evictionReady:   false,
+				evictionUnready: false,
+			},
+			pod: collectors.Pod{
+				Pod: podCanDecrement,
+				Instance: collectors.Instance{
+					InstanceID: instanceID,
+					EC2:        ec2Running,
+				},
+			},
+		},
+		{
+			name: "instance-want-shutdown",
+			want: wantCase{
+				evictionWant:    true,
+				evictionReady:   true,
+				evictionUnready: false,
+			},
+			pod: collectors.Pod{
+				Pod: podCanDecrement,
+				Instance: collectors.Instance{
+					InstanceID: instanceID,
+					EC2:        ec2Running,
+					ASG:        asgC0D0,
+				},
+			},
+		},
+		{
+			name: "pod-unready",
+			want: wantCase{
+				evictionWant:    true,
+				evictionReady:   false,
+				evictionUnready: true,
+			},
+			pod: collectors.Pod{
+				Pod: podCannotDecrement,
+				Instance: collectors.Instance{
+					InstanceID: instanceID,
+					EC2:        ec2Running,
+					ASG:        asgC0D0,
+				},
+			},
+		},
+		{
+			name: "instance-terminating",
+			want: wantCase{
+				evictionWant:    false,
+				evictionReady:   false,
+				evictionUnready: false,
+			},
+			pod: collectors.Pod{
+				Pod: podCanDecrement,
+				Instance: collectors.Instance{
+					InstanceID: instanceID,
+					EC2:        ec2Terminating,
+					ASG:        asgC0D0,
+				},
+			},
+		},
+		{
+			name: "asg-completed",
+			want: wantCase{
+				evictionWant:    false,
+				evictionReady:   false,
+				evictionUnready: false,
+			},
+			pod: collectors.Pod{
+				Pod: podCanDecrement,
+				Instance: collectors.Instance{
+					InstanceID: instanceID,
+					EC2:        ec2Running,
+					ASG:        asgC1D0,
+				},
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				evictionWant    = PodsThatWantEviction()(&tc.pod)
+				evictionReady   = PodsReadyForEviction()(&tc.pod)
+				evictionUnready = PodsUnreadyForEviction()(&tc.pod)
+			)
+
+			// Test expected test cases
+			assert.Equal(t,
+				tc.want.evictionWant, evictionWant,
+				"PodsThatWantEviction should match",
+			)
+			assert.Equal(t,
+				tc.want.evictionReady, evictionReady,
+				"PodsReadyForEviction should match",
+			)
+			assert.Equal(t,
+				tc.want.evictionUnready, evictionUnready,
+				"PodsUnreadyForEviction should match",
+			)
+
+			// Additional sanity checks
+			assert.False(t,
+				evictionUnready && evictionReady,
+				"'ready' and 'unready' should never match on the same pod")
+			assert.False(t,
+				!evictionWant && evictionReady,
+				"'ready' should not match, when 'want' does")
+			assert.False(t,
+				!evictionWant && evictionUnready,
+				"'unready' should not match, when 'want' does")
+			assert.False(t,
+				evictionWant && !evictionReady && !evictionUnready,
+				"either `ready` or `unready` should match, when `want` does")
+
+		})
+	}
 }

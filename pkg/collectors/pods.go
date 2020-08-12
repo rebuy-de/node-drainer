@@ -12,6 +12,7 @@ type Pod struct {
 	pod.Pod
 }
 
+// Deprecated: Should use filters instead.
 func (p *Pod) NeedsEviction() bool {
 	if p == nil {
 		return false

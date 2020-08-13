@@ -163,7 +163,7 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 		}
 
 		instance := instances.Get(transition.Name)
-		if instance != nil && transition.To == ec2.InstanceStateTerminated {
+		if instance != nil && transition.To == ec2.InstanceStateTerminated && instance.EC2.TerminationTime != nil {
 			duration := instance.EC2.TerminationTime.Sub(instance.ASG.TriggeredAt)
 			logger.Infof("instance drainage took %v", duration)
 

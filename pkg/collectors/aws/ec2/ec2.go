@@ -5,6 +5,7 @@ package ec2
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -222,7 +223,11 @@ func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 					// is fine, since we use it only for displaying purposes.
 					// If we need a reliable value, we would need to get it
 					// from CloudTrail.
-					terminationTime, err := time.Parse("User initiated (2006-01-02 15:04:05 MST)", aws.StringValue(dto.StateTransitionReason))
+					text := aws.StringValue(dto.StateTransitionReason)
+					text = strings.TrimPrefix(text, "User initiated")
+					text = strings.TrimPrefix(text, "Service initiated")
+					text = strings.TrimSpace(text)
+					terminationTime, err := time.Parse("(2006-01-02 15:04:05 MST)", text)
 					if err != nil {
 						logutil.Get(ctx).
 							WithField("state-transition-reason", dto.StateTransitionReason).

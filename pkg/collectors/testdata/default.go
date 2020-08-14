@@ -107,5 +107,12 @@ func Default() collectors.Lists {
 		UnreadyReplicas: 0,
 	})
 
+	b.AddInstance(1, InstanceTemplate{
+		EC2:  EC2Running,
+		Spot: SpotRunning,
+		Node: NodeSoftTaint,
+		Name: "stateless",
+	})
+
 	return b.Build()
 }

@@ -12,6 +12,10 @@
       <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
     {{ else if eq .Key "rebuy.com/pool" }}
       <span title="{{ .ToString }}" class="badge badge-info">{{ .Value | StringTitle }}</span>
+    {{ else if eq .Key "node-drainer.rebuy-de.github.io/soft-shutdown" }}
+      <span title="{{ .ToString }}" class="badge badge-danger">SoftShutdown</span>
+    {{ else if eq .Key "node-drainer.rebuy-de.github.io/hard-shutdown" }}
+      <span title="{{ .ToString }}" class="badge badge-danger">HardShutdown</span>
     {{ else }}
       <code>{{ .ToString }}</code>
     {{ end }}

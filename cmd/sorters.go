@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	TaintSoft = `rebuy.com/node-drainer-soft-shutdown`
-	TaintHard = `rebuy.com/node-drainer-hard-shutdown`
+	TaintSoft = `node-drainer.rebuy-de.github.io/soft-shutdown`
+	TaintHard = `node-drainer.rebuy-de.github.io/hard-shutdown`
 )
 
 func SortInstances(instances collectors.Instances) {

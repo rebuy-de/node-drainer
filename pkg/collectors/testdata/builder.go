@@ -224,7 +224,7 @@ func (b *Builder) buildInstances(result collectors.Lists) collectors.Lists {
 
 			if template.Node == NodeSoftTaint {
 				node.Taints = append(node.Taints, v1.Taint{
-					Key:    "rebuy.com/node-drainer/soft-shutdown",
+					Key:    "node-drainer.rebuy-de.github.io/soft-shutdown",
 					Effect: "NoSchedule",
 				})
 			}

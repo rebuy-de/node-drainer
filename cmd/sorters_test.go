@@ -207,7 +207,7 @@ func TestPodSelectors(t *testing.T) {
 			InstanceID: instanceID,
 			Taints: []node.Taint{
 				node.Taint{
-					Key: `rebuy.com/node-drainer-soft-shutdown`,
+					Key: TaintSoft,
 				},
 			},
 		}

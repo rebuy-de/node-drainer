@@ -65,6 +65,7 @@ func InitIntrumentation(ctx context.Context) context.Context {
 	cv, ok = instutil.GaugeVec(ctx, metricMainLoopInstanceStateTransitions)
 	if ok {
 		values := []string{
+			ec2.InstanceStatePending,
 			ec2.InstanceStateRunning,
 			ec2.InstanceStateTerminated,
 			ec2.InstanceStateShuttingDown,
@@ -134,14 +135,26 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 		}
 	}
 	for _, transition := range tcp.Finish() {
+		var (
+			from = transition.From
+			to   = transition.To
+		)
+
+		if from == "" {
+			from = "N/A"
+		}
+		if to == "" {
+			to = "N/A"
+		}
+
 		logutil.Get(ctx).
 			WithFields(transition.Fields).
 			Infof("pod %s changed state: [ %s -> %s ]",
-				transition.Name, transition.From, transition.To)
+				transition.Name, from, to)
 
 		cv, ok := instutil.CounterVec(ctx, metricMainLoopPodTransitions)
 		if ok {
-			cv.WithLabelValues(transition.From, transition.To).Inc()
+			cv.WithLabelValues(from, to).Inc()
 		}
 	}
 
@@ -153,6 +166,14 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 	for _, transition := range tci.Finish() {
 		logger := logutil.Get(ctx).
 			WithFields(transition.Fields)
+
+		if transition.From == "" || transition.To == "" {
+			// These transitions are not interesting. We log them in debug
+			// level for completeness anyways.
+			logger.Debugf("instance %s changed state: [ %s -> %s ]",
+				transition.Name, transition.From, transition.To)
+			continue
+		}
 
 		logger.Infof("instance %s changed state: [ %s -> %s ]",
 			transition.Name, transition.From, transition.To)

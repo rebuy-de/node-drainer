@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
@@ -151,6 +153,10 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 		}
 
 		logutil.Get(ctx).
+			WithField(
+				"pod-status-transition",
+				fmt.Sprintf("%s -> %s", transition.From, transition.To),
+			).
 			WithFields(transition.Fields).
 			Infof("pod %s changed state: [ %s -> %s ]",
 				transition.Name, from, to)
@@ -168,6 +174,10 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 	}
 	for _, transition := range tci.Finish() {
 		logger := logutil.Get(ctx).
+			WithField(
+				"ec2-state-transition",
+				fmt.Sprintf("%s -> %s", transition.From, transition.To),
+			).
 			WithFields(transition.Fields)
 
 		if transition.From == "" || transition.To == "" {
@@ -199,16 +209,24 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 	}
 
 	// Log spot state changes
-	tci := instutil.GetTransitionCollector(ctx, metricMainLoopSpotStateTransitions)
+	tcs := instutil.GetTransitionCollector(ctx, metricMainLoopSpotStateTransitions)
 	for _, instance := range instances {
 		if instance.Spot.RequestID == "" {
 			continue
 		}
 
-		tci.Observe(instance.InstanceID, instance.Spot.StatusCode, logutil.FromStruct(instance))
+		tcs.Observe(
+			instance.InstanceID,
+			strings.TrimRight(path.Join(instance.Spot.State, instance.Spot.StatusCode), "/"),
+			logutil.FromStruct(instance),
+		)
 	}
-	for _, transition := range tci.Finish() {
+	for _, transition := range tcs.Finish() {
 		logger := logutil.Get(ctx).
+			WithField(
+				"spot-status-transition",
+				fmt.Sprintf("%s -> %s", transition.From, transition.To),
+			).
 			WithFields(transition.Fields)
 
 		if transition.From == "" || transition.To == "" {

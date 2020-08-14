@@ -18,6 +18,7 @@ import (
 )
 
 const (
+	InstanceStatePending      = "pending"
 	InstanceStateRunning      = "running"
 	InstanceStateTerminated   = "terminated"
 	InstanceStateShuttingDown = "shutting-down"

@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
@@ -19,6 +21,7 @@ const (
 	metricMainLoopPendingInstances         = "mainloop_pending_instances"
 	metricMainLoopPodStats                 = "mainloop_pod_stats"
 	metricMainLoopPodTransitions           = "mainloop_pod_transitions_total"
+	metricMainLoopSpotStateTransitions     = "mainloop_spot_transitions_total"
 )
 
 func InitIntrumentation(ctx context.Context) context.Context {
@@ -31,9 +34,11 @@ func InitIntrumentation(ctx context.Context) context.Context {
 
 	ctx = instutil.NewCounterVec(ctx, metricMainLoopPodTransitions, "from", "to")
 	ctx = instutil.NewCounterVec(ctx, metricMainLoopInstanceStateTransitions, "from", "to")
+	ctx = instutil.NewCounterVec(ctx, metricMainLoopSpotStateTransitions, "from", "to")
 
 	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopPodTransitions)
 	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopInstanceStateTransitions)
+	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopSpotStateTransitions)
 
 	// Register the already known label values, so Prometheus starts with 0 and
 	// not 1 and properly calculates rates.
@@ -65,6 +70,7 @@ func InitIntrumentation(ctx context.Context) context.Context {
 	cv, ok = instutil.GaugeVec(ctx, metricMainLoopInstanceStateTransitions)
 	if ok {
 		values := []string{
+			ec2.InstanceStatePending,
 			ec2.InstanceStateRunning,
 			ec2.InstanceStateTerminated,
 			ec2.InstanceStateShuttingDown,
@@ -134,25 +140,53 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 		}
 	}
 	for _, transition := range tcp.Finish() {
+		var (
+			from = transition.From
+			to   = transition.To
+		)
+
+		if from == "" {
+			from = "N/A"
+		}
+		if to == "" {
+			to = "N/A"
+		}
+
 		logutil.Get(ctx).
+			WithField(
+				"pod-status-transition",
+				fmt.Sprintf("%s -> %s", transition.From, transition.To),
+			).
 			WithFields(transition.Fields).
 			Infof("pod %s changed state: [ %s -> %s ]",
-				transition.Name, transition.From, transition.To)
+				transition.Name, from, to)
 
 		cv, ok := instutil.CounterVec(ctx, metricMainLoopPodTransitions)
 		if ok {
-			cv.WithLabelValues(transition.From, transition.To).Inc()
+			cv.WithLabelValues(from, to).Inc()
 		}
 	}
 
-	// Log instance state changes
+	// Log ec2 state changes
 	tci := instutil.GetTransitionCollector(ctx, metricMainLoopInstanceStateTransitions)
 	for _, instance := range instances {
 		tci.Observe(instance.InstanceID, instance.EC2.State, logutil.FromStruct(instance))
 	}
 	for _, transition := range tci.Finish() {
 		logger := logutil.Get(ctx).
+			WithField(
+				"ec2-state-transition",
+				fmt.Sprintf("%s -> %s", transition.From, transition.To),
+			).
 			WithFields(transition.Fields)
+
+		if transition.From == "" || transition.To == "" {
+			// These transitions are not interesting. We log them in debug
+			// level for completeness anyways.
+			logger.Debugf("instance %s changed state: [ %s -> %s ]",
+				transition.Name, transition.From, transition.To)
+			continue
+		}
 
 		logger.Infof("instance %s changed state: [ %s -> %s ]",
 			transition.Name, transition.From, transition.To)
@@ -171,6 +205,44 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 			if ok {
 				m.Observe(duration.Seconds())
 			}
+		}
+	}
+
+	// Log spot state changes
+	tcs := instutil.GetTransitionCollector(ctx, metricMainLoopSpotStateTransitions)
+	for _, instance := range instances {
+		if instance.Spot.RequestID == "" {
+			continue
+		}
+
+		tcs.Observe(
+			instance.InstanceID,
+			strings.TrimRight(path.Join(instance.Spot.State, instance.Spot.StatusCode), "/"),
+			logutil.FromStruct(instance),
+		)
+	}
+	for _, transition := range tcs.Finish() {
+		logger := logutil.Get(ctx).
+			WithField(
+				"spot-status-transition",
+				fmt.Sprintf("%s -> %s", transition.From, transition.To),
+			).
+			WithFields(transition.Fields)
+
+		if transition.From == "" || transition.To == "" {
+			// These transitions are not interesting. We log them in debug
+			// level for completeness anyways.
+			logger.Debugf("spot request %s changed status: [ %s -> %s ]",
+				transition.Name, transition.From, transition.To)
+			continue
+		}
+
+		logger.Infof("spot request %s changed status: [ %s -> %s ]",
+			transition.Name, transition.From, transition.To)
+
+		cv, ok := instutil.CounterVec(ctx, metricMainLoopSpotStateTransitions)
+		if ok {
+			cv.WithLabelValues(transition.From, transition.To).Inc()
 		}
 	}
 

@@ -19,6 +19,7 @@ const (
 	metricMainLoopPendingInstances         = "mainloop_pending_instances"
 	metricMainLoopPodStats                 = "mainloop_pod_stats"
 	metricMainLoopPodTransitions           = "mainloop_pod_transitions_total"
+	metricMainLoopSpotStateTransitions     = "mainloop_spot_transitions_total"
 )
 
 func InitIntrumentation(ctx context.Context) context.Context {
@@ -31,9 +32,11 @@ func InitIntrumentation(ctx context.Context) context.Context {
 
 	ctx = instutil.NewCounterVec(ctx, metricMainLoopPodTransitions, "from", "to")
 	ctx = instutil.NewCounterVec(ctx, metricMainLoopInstanceStateTransitions, "from", "to")
+	ctx = instutil.NewCounterVec(ctx, metricMainLoopSpotStateTransitions, "from", "to")
 
 	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopPodTransitions)
 	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopInstanceStateTransitions)
+	ctx = instutil.NewTransitionCollector(ctx, metricMainLoopSpotStateTransitions)
 
 	// Register the already known label values, so Prometheus starts with 0 and
 	// not 1 and properly calculates rates.
@@ -158,7 +161,7 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 		}
 	}
 
-	// Log instance state changes
+	// Log ec2 state changes
 	tci := instutil.GetTransitionCollector(ctx, metricMainLoopInstanceStateTransitions)
 	for _, instance := range instances {
 		tci.Observe(instance.InstanceID, instance.EC2.State, logutil.FromStruct(instance))
@@ -192,6 +195,36 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 			if ok {
 				m.Observe(duration.Seconds())
 			}
+		}
+	}
+
+	// Log spot state changes
+	tci := instutil.GetTransitionCollector(ctx, metricMainLoopSpotStateTransitions)
+	for _, instance := range instances {
+		if instance.Spot.RequestID == "" {
+			continue
+		}
+
+		tci.Observe(instance.InstanceID, instance.Spot.StatusCode, logutil.FromStruct(instance))
+	}
+	for _, transition := range tci.Finish() {
+		logger := logutil.Get(ctx).
+			WithFields(transition.Fields)
+
+		if transition.From == "" || transition.To == "" {
+			// These transitions are not interesting. We log them in debug
+			// level for completeness anyways.
+			logger.Debugf("spot request %s changed status: [ %s -> %s ]",
+				transition.Name, transition.From, transition.To)
+			continue
+		}
+
+		logger.Infof("spot request %s changed status: [ %s -> %s ]",
+			transition.Name, transition.From, transition.To)
+
+		cv, ok := instutil.CounterVec(ctx, metricMainLoopSpotStateTransitions)
+		if ok {
+			cv.WithLabelValues(transition.From, transition.To).Inc()
 		}
 	}
 

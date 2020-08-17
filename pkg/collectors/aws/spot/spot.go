@@ -24,6 +24,15 @@ const (
 	StateClosed    = "closed"
 )
 
+// See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-request-status.html
+const (
+	StatusCodeFulfilled                         = "fulfilled"
+	StatusCodeInstanceTerminatedByUser          = "instance-terminated-by-user"
+	StatusCodeMarkedForTermination              = "marked-for-termination"
+	StatusCodeMarkedForStop                     = "marked-for-stop"
+	StatusCodeRequestCanceledAndInstanceRunning = "request-canceled-and-instance-running"
+)
+
 const (
 	InstanceStateRunning      = "running"
 	InstanceStateTerminated   = "terminated"

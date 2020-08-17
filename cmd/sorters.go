@@ -5,6 +5,7 @@ import (
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 )
 
 const (
@@ -45,8 +46,18 @@ func InstancesThatWantShutdown() collectors.InstanceSelector {
 	return collectors.InstanceQuery().
 		Select(collectors.HasEC2Data).
 		Select(collectors.HasEC2State(ec2.InstanceStateRunning)).
-		Select(collectors.HasASGData).
-		Filter(collectors.LifecycleCompleted)
+		Any(
+			collectors.InstanceQuery().
+				Select(collectors.HasASGData).
+				Filter(collectors.LifecycleCompleted),
+			collectors.InstanceQuery().
+				Select(collectors.HasSpotData).
+				Select(collectors.HasSpotStatusCode(
+					spot.StatusCodeMarkedForTermination,
+					spot.StatusCodeMarkedForStop,
+					spot.StatusCodeRequestCanceledAndInstanceRunning,
+				)),
+		)
 }
 
 func InstancesThatNeedCordon() collectors.InstanceSelector {

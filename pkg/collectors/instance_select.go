@@ -9,6 +9,8 @@ func HasEC2Data(i *Instance) bool { return i.HasEC2Data() }
 
 func HasASGData(i *Instance) bool { return i.HasASGData() }
 
+func HasSpotData(i *Instance) bool { return i.Spot.InstanceID != "" }
+
 // Deprecated: Should use filters instead.
 func PendingLifecycleCompletion(i *Instance) bool { return i.PendingLifecycleCompletion() }
 
@@ -40,6 +42,18 @@ func HasTaint(key string) InstanceSelector {
 				return true
 			}
 		}
+		return false
+	}
+}
+
+func HasSpotStatusCode(codes ...string) InstanceSelector {
+	return func(i *Instance) bool {
+		for _, code := range codes {
+			if code == i.Spot.StatusCode {
+				return true
+			}
+		}
+
 		return false
 	}
 }

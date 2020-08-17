@@ -10,6 +10,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/asg"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/testdata"
@@ -370,6 +371,94 @@ func TestPodSelectors(t *testing.T) {
 				evictionWant && !evictionReady && !evictionUnready,
 				"either `ready` or `unready` should match, when `want` does")
 
+		})
+	}
+}
+
+func TestInstanceSelectors(t *testing.T) {
+	const (
+		instanceID = "i-00000000000000000"
+		nodeName   = "ip-172-20-0-1.eu-west-1.compute.internal"
+	)
+
+	type wantCase struct {
+		wantShutdown bool
+	}
+
+	type testCase struct {
+		name     string
+		instance collectors.Instance
+		want     wantCase
+	}
+
+	cases := []testCase{
+		{
+			name: "Empty",
+			want: wantCase{wantShutdown: false},
+		},
+		{
+			name: "OnlyEC2",
+			want: wantCase{wantShutdown: false},
+			instance: collectors.Instance{
+				InstanceID: instanceID,
+				EC2:        ec2.Instance{InstanceID: instanceID, State: ec2.InstanceStateRunning},
+			},
+		},
+		{
+			name: "NewLifecycleHook",
+			want: wantCase{wantShutdown: true},
+			instance: collectors.Instance{
+				InstanceID: instanceID,
+				EC2:        ec2.Instance{InstanceID: instanceID, State: ec2.InstanceStateRunning},
+				ASG:        asg.Instance{ID: instanceID},
+			},
+		},
+		{
+			name: "CompletedLifecycleHook",
+			want: wantCase{wantShutdown: false},
+			instance: collectors.Instance{
+				InstanceID: instanceID,
+				EC2:        ec2.Instance{InstanceID: instanceID, State: ec2.InstanceStateRunning},
+				ASG:        asg.Instance{ID: instanceID, Completed: true},
+			},
+		},
+	}
+
+	for _, statusCode := range []string{"fulfilled", "instance-terminated-by-user"} {
+		cases = append(cases, testCase{
+			name: fmt.Sprintf("SpotHealthy(%s)", statusCode),
+			want: wantCase{wantShutdown: false},
+			instance: collectors.Instance{
+				InstanceID: instanceID,
+				EC2:        ec2.Instance{InstanceID: instanceID, State: ec2.InstanceStateRunning},
+				Spot:       spot.Instance{InstanceID: instanceID, State: "undefined", StatusCode: statusCode},
+			},
+		})
+	}
+
+	for _, statusCode := range []string{"marked-for-termination", "marked-for-stop", "request-canceled-and-instance-running"} {
+		cases = append(cases, testCase{
+			name: fmt.Sprintf("SpotCancelling(%s)", statusCode),
+			want: wantCase{wantShutdown: true},
+			instance: collectors.Instance{
+				InstanceID: instanceID,
+				EC2:        ec2.Instance{InstanceID: instanceID, State: ec2.InstanceStateRunning},
+				Spot:       spot.Instance{InstanceID: instanceID, State: "undefined", StatusCode: statusCode},
+			},
+		})
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var (
+				wantShutdown = InstancesThatWantShutdown()(&tc.instance)
+			)
+
+			// Test expected test cases
+			assert.Equal(t,
+				tc.want.wantShutdown, wantShutdown,
+				"InstancesThatWantShutdown should match",
+			)
 		})
 	}
 }

@@ -47,6 +47,18 @@ func (is InstanceSelector) FilterByAllPods(ps PodSelector) InstanceSelector {
 	})
 }
 
+func (is InstanceSelector) Any(slice ...InstanceSelector) InstanceSelector {
+	return InstanceSelector(func(i *Instance) bool {
+		for _, s := range slice {
+			if s(i) {
+				return true
+			}
+		}
+
+		return false
+	})
+}
+
 // PodQuery returns a dummy selector that selects all pods. It is
 // used to make chaining selectors prettier while making sure the type is
 // correct. See InstanceQuery for an example.

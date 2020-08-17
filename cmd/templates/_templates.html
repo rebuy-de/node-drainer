@@ -1,0 +1,23 @@
+{{ define "pretty_node_taints" }}
+  {{ range .}}
+    {{ if eq .Key "node-role.kubernetes.io/master" }}
+      <span title="{{ .ToString }}" class="badge badge-info">Master</span>
+    {{ else if eq .Key "node.kubernetes.io/unschedulable" }}
+      <span title="{{ .ToString }}" class="badge badge-warning">Unschedulable</span>
+    {{ else if eq .Key "DeletionCandidateOfClusterAutoscaler" }}
+      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
+    {{ else if eq .Key "ToBeDeletedByClusterAutoscaler" }}
+      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
+    {{ else if eq .Key "node.kubernetes.io/not-ready" }}
+      <span title="{{ .ToString }}" class="badge badge-warning">{{ .Key | StringTitle }}</span>
+    {{ else if eq .Key "rebuy.com/pool" }}
+      <span title="{{ .ToString }}" class="badge badge-info">{{ .Value | StringTitle }}</span>
+    {{ else if eq .Key "node-drainer.rebuy-de.github.io/soft-shutdown" }}
+      <span title="{{ .ToString }}" class="badge badge-danger">SoftShutdown</span>
+    {{ else if eq .Key "node-drainer.rebuy-de.github.io/hard-shutdown" }}
+      <span title="{{ .ToString }}" class="badge badge-danger">HardShutdown</span>
+    {{ else }}
+      <code>{{ .ToString }}</code>
+    {{ end }}
+  {{ end }}
+{{ end }}

@@ -1,3 +1,6 @@
 /vendor
 /dist
 node-drainer*
+
+.terraform*
+terraform.tfstate*

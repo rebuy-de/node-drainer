@@ -67,7 +67,6 @@ type Client interface {
 
 type client struct {
 	kube    kubernetes.Interface
-	cache   map[string]Pod
 	emitter *syncutil.SignalEmitter
 
 	pods   core_informers.PodInformer

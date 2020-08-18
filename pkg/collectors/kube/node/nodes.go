@@ -54,7 +54,6 @@ type Client interface {
 
 type client struct {
 	kube    kubernetes.Interface
-	cache   map[string]Node
 	emitter *syncutil.SignalEmitter
 
 	factory informers.SharedInformerFactory

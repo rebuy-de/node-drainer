@@ -1,7 +1,6 @@
 package collectors
 
 import (
-	"path"
 	"sort"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
@@ -45,28 +44,10 @@ func (i *Instance) NodeName() string {
 
 type Pods []Pod
 
-func (pods Pods) Names() []string {
-	result := []string{}
-	for _, pod := range pods {
-		result = append(result, path.Join(pod.Pod.Namespace, pod.Pod.Name))
-	}
-	return result
-}
-
 // Sort returns a sorted list of pods based on the given sorter.
 func (pods Pods) Sort(by PodsBy) Pods {
 	sort.SliceStable(pods, func(i, j int) bool {
 		return by(&pods[i], &pods[j])
-	})
-
-	return pods
-}
-
-// SortReverse returns a sorted list of pods based on the given sorter.
-// The output is reversed.
-func (pods Pods) SortReverse(by PodsBy) Pods {
-	sort.SliceStable(pods, func(i, j int) bool {
-		return !by(&pods[i], &pods[j])
 	})
 
 	return pods

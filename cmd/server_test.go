@@ -2,38 +2,101 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
 	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/testutil"
+	"github.com/stretchr/testify/require"
 
-	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/testdata"
+	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 )
 
 func init() {
 	useUTC = true
 }
 
+type testUnique map[string]struct{}
+
+func (u *testUnique) Check(t *testing.T, value string) {
+	t.Helper()
+
+	_, ok := (*u)[value]
+	if ok {
+		t.Errorf("%s appears more than once", value)
+		return
+	}
+
+	(*u)[value] = struct{}{}
+}
+
 func TestServerRender(t *testing.T) {
-	lists := testdata.Default()
-	server := new(Server)
+	contents, err := ioutil.ReadFile("test-fixtures/status.json")
+	require.NoError(t, err)
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "/", nil)
+	lists := collectors.Lists{}
+	err = json.Unmarshal(contents, &lists)
+	require.NoError(t, err)
 
-	server.renderStatus(w, r, lists)
-	response := w.Result()
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("got %s", response.Status)
-	}
+	t.Run("TestData", func(t *testing.T) {
+		// Some additional checks to make sure the testdata makes sense. This
+		// should make it less worrisome to add new data.
 
-	buf := new(bytes.Buffer)
+		var (
+			uniqueEC2InstanceID  = testUnique{}
+			uniqueEC2NodeName    = testUnique{}
+			uniqueASGInstanceID  = testUnique{}
+			uniqueSpotInstanceID = testUnique{}
+			uniqueSpotRequest    = testUnique{}
+			uniqueKubeInstanceID = testUnique{}
+			uniqueKubeNodeName   = testUnique{}
+			uniquePodName        = testUnique{}
+		)
 
-	_, err := buf.ReadFrom(response.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
+		for _, instance := range lists.ASG {
+			uniqueASGInstanceID.Check(t, instance.ID)
+		}
 
-	testutil.AssertGolden(t, "test-fixtures/status-golden.html", buf.Bytes())
+		for _, instance := range lists.EC2 {
+			uniqueEC2InstanceID.Check(t, instance.InstanceID)
+			uniqueEC2NodeName.Check(t, instance.NodeName)
+		}
+
+		for _, instance := range lists.Spot {
+			uniqueSpotInstanceID.Check(t, instance.InstanceID)
+			uniqueSpotRequest.Check(t, instance.RequestID)
+		}
+
+		for _, instance := range lists.Nodes {
+			uniqueKubeInstanceID.Check(t, instance.InstanceID)
+			uniqueKubeNodeName.Check(t, instance.NodeName)
+		}
+
+		for _, pod := range lists.Pods {
+			uniquePodName.Check(t, path.Join(pod.Name, pod.Namespace))
+		}
+
+	})
+
+	t.Run("StatusPage", func(t *testing.T) {
+		server := new(Server)
+
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+
+		server.renderStatus(w, r, lists)
+		response := w.Result()
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("got %s", response.Status)
+		}
+
+		buf := new(bytes.Buffer)
+		_, err = buf.ReadFrom(response.Body)
+		require.NoError(t, err)
+
+		testutil.AssertGolden(t, "test-fixtures/status-golden.html", buf.Bytes())
+	})
 }

@@ -33,12 +33,6 @@ const (
 	StatusCodeRequestCanceledAndInstanceRunning = "request-canceled-and-instance-running"
 )
 
-const (
-	InstanceStateRunning      = "running"
-	InstanceStateTerminated   = "terminated"
-	InstanceStateShuttingDown = "shutting-down"
-)
-
 // Instance is the instance-related data that is retrieved via API.
 type Instance struct {
 	InstanceID       string    `logfield:"instance-id,omitempty"`

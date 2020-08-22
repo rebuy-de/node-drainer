@@ -63,6 +63,7 @@ func InstancesThatWantShutdown() collectors.InstanceSelector {
 func InstancesThatNeedCordon() collectors.InstanceSelector {
 	return collectors.InstanceQuery().
 		Select(InstancesThatWantShutdown()).
+		Select(collectors.HasNodeData).
 		Filter(collectors.HasTaint(TaintSoft))
 }
 

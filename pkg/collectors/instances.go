@@ -29,6 +29,10 @@ func (i *Instance) HasASGData() bool {
 	return i != nil && i.ASG.ID != ""
 }
 
+func (i *Instance) HasNodeData() bool {
+	return i != nil && i.Node.InstanceID != "" && i.Node.NodeName != ""
+}
+
 // Deprecated: Should use filters instead.
 func (i *Instance) WantsShutdown() bool {
 	return i.HasASGData() && i.HasEC2Data() && i.EC2.IsRunning()

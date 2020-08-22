@@ -9,6 +9,8 @@ func HasEC2Data(i *Instance) bool { return i.HasEC2Data() }
 
 func HasASGData(i *Instance) bool { return i.HasASGData() }
 
+func HasNodeData(i *Instance) bool { return i.HasNodeData() }
+
 func HasSpotData(i *Instance) bool { return i.Spot.InstanceID != "" }
 
 // Deprecated: Should use filters instead.

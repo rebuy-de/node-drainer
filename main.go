@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/cmdutil"
 	"github.com/sirupsen/logrus"
 
 	"github.com/rebuy-de/node-drainer/v2/cmd"

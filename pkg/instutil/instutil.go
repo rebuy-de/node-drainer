@@ -7,8 +7,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/cmdutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
 )
 
 type contextKeyCounter string

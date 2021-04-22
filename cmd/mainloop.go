@@ -7,8 +7,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/syncutil"
 )
 
 // MainLoop does the actual node-drainer actions. When any client cache

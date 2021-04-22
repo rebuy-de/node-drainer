@@ -6,8 +6,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/pkg/errors"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/cmdutil"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/kubeutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/cmdutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/kubeutil"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 

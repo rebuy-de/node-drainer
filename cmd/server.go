@@ -13,7 +13,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/webutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/webutil"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 )

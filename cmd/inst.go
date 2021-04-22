@@ -10,7 +10,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/ec2"
 	"github.com/rebuy-de/node-drainer/v2/pkg/instutil"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
 )
 
 const (

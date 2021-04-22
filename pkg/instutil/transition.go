@@ -3,7 +3,7 @@ package instutil
 import (
 	"context"
 
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
 	"github.com/sirupsen/logrus"
 )
 

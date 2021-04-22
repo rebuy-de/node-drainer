@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/pkg/errors"
 
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/logutil"
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/syncutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/syncutil"
 )
 
 // See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-bid-status.html

@@ -9,7 +9,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/rebuy-de/rebuy-go-sdk/v2/pkg/testutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/testutil"
 	"github.com/stretchr/testify/require"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"

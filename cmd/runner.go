@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/cmdutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/kubeutil"
@@ -17,24 +16,28 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
+	"github.com/rebuy-de/node-drainer/v2/pkg/vaultutil"
 )
 
 type Runner struct {
-	awsProfile string
+	noMainloop bool
 	sqsQueue   string
 
-	kube kubeutil.Params
+	kube  kubeutil.Params
+	vault vaultutil.Params
 }
 
 func (r *Runner) Bind(cmd *cobra.Command) error {
 	cmd.PersistentFlags().StringVar(
-		&r.awsProfile, "profile", "",
-		`use a specific AWS profile from your credential file`)
-	cmd.PersistentFlags().StringVar(
 		&r.sqsQueue, "queue", "",
-		`name of the SQS queue that contains the ASG lifecycle hook messages`)
+		`Name of the SQS queue that contains the ASG lifecycle hook messages.`)
+	cmd.PersistentFlags().BoolVar(
+		&r.noMainloop, "no-mainloop", false,
+		`Disable the mainloop and make the drainer read-only.`)
 
 	r.kube.Bind(cmd)
+	r.vault.Bind(cmd)
+	r.vault.BindAWS(cmd)
 
 	return nil
 }
@@ -42,10 +45,7 @@ func (r *Runner) Bind(cmd *cobra.Command) error {
 func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	ctx = InitIntrumentation(ctx)
 
-	awsSession, err := session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-		Profile:           r.awsProfile,
-	})
+	awsSession, err := r.vault.AWSSession()
 	cmdutil.Must(err)
 
 	kubeInterface, err := r.kube.Client()
@@ -87,8 +87,10 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	egrp.Go(func() error {
 		return errors.Wrap(server.Run(ctx), "failed to run HTTP server")
 	})
-	egrp.Go(func() error {
-		return errors.Wrap(mainLoop.Run(ctx), "failed to run main loop")
-	})
+	if !r.noMainloop {
+		egrp.Go(func() error {
+			return errors.Wrap(mainLoop.Run(ctx), "failed to run main loop")
+		})
+	}
 	cmdutil.Must(egrp.Wait())
 }

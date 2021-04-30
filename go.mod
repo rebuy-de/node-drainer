@@ -5,7 +5,6 @@ go 1.15
 require (
 	github.com/aws/aws-sdk-go v1.32.0
 	github.com/gobuffalo/packr/v2 v2.8.1
-	github.com/hashicorp/vault/api v1.1.0 // indirect
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/mittwald/vaultgo v0.0.6
 	github.com/pkg/errors v0.9.1

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/cmdutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/kubeutil"
@@ -20,6 +21,7 @@ import (
 )
 
 type Runner struct {
+	awsProfile string
 	noMainloop bool
 	sqsQueue   string
 
@@ -28,6 +30,9 @@ type Runner struct {
 }
 
 func (r *Runner) Bind(cmd *cobra.Command) error {
+	cmd.PersistentFlags().StringVar(
+		&r.awsProfile, "profile", "",
+		`use a specific AWS profile from your credential file`)
 	cmd.PersistentFlags().StringVar(
 		&r.sqsQueue, "queue", "",
 		`Name of the SQS queue that contains the ASG lifecycle hook messages.`)
@@ -45,8 +50,25 @@ func (r *Runner) Bind(cmd *cobra.Command) error {
 func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	ctx = InitIntrumentation(ctx)
 
-	awsSession, err := r.vault.AWSSession()
-	cmdutil.Must(err)
+	var (
+		awsSession *session.Session
+		err        error
+	)
+
+	if r.vault == (vaultutil.Params{}) {
+		// Fallback to generic AWS session generation, if no vault flag was provided.
+		awsSession, err = session.NewSessionWithOptions(session.Options{
+			SharedConfigState: session.SharedConfigEnable,
+			Profile:           r.awsProfile,
+		})
+		cmdutil.Must(err)
+	} else {
+		vault, err := vaultutil.Init(ctx, r.vault)
+		cmdutil.Must(err)
+
+		awsSession, err = vault.AWSSession()
+		cmdutil.Must(err)
+	}
 
 	kubeInterface, err := r.kube.Client()
 	cmdutil.Must(err)

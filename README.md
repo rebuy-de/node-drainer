@@ -14,8 +14,8 @@ Meant to be run in side Kubernetes with a single replica only.
 >
 > :fire: Consider using the [AWS Node Termination
 > Handler](https://github.com/aws/aws-node-termination-handler), which is the
-> official tool from AWS. It has better support and we will ourselves likely
-> with to it, if we experience a bigger roadblock with node-drainer.
+> official tool from AWS. It has better support and we will probably migrate
+> to it ourselves, if we experience a bigger roadblock with node-drainer.
 
 ## Use cases
 *node-drainer* is useful whenever any of the Kubernetes worker nodes running in AWS must be shut down. Graceful eviction of Kubernetes pods from terminated nodes ensures continuous operation of services when:

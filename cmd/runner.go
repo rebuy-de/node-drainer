@@ -55,7 +55,11 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 		err        error
 	)
 
-	if r.vault == (vaultutil.Params{}) {
+	if r.vault == (vaultutil.Params{
+		Role:          cmdutil.Name,
+		AWSRole:       cmdutil.Name,
+		AWSEnginePath: "aws",
+	}) {
 		// Fallback to generic AWS session generation, if no vault flag was provided.
 		awsSession, err = session.NewSessionWithOptions(session.Options{
 			SharedConfigState: session.SharedConfigEnable,

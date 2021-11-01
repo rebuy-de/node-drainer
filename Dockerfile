@@ -1,4 +1,4 @@
-FROM quay.io/rebuy/rebuy-go-sdk:v3.8.0 as builder
+FROM quay.io/rebuy/rebuy-go-sdk:v3.10.0 as builder
 
 FROM alpine:latest
 RUN apk add --no-cache ca-certificates

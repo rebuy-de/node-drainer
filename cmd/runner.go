@@ -8,6 +8,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/cmdutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/kubeutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/webutil"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 
@@ -92,6 +93,7 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	server := &Server{
 		collectors: collectors,
 		mainloop:   mainLoop,
+		renderer:   webutil.NewTemplateRenderer(&templates),
 	}
 
 	egrp, ctx := errgroup.WithContext(ctx)

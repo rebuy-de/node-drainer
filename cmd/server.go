@@ -2,27 +2,24 @@ package cmd
 
 import (
 	"context"
+	"embed"
 	"fmt"
-	"html/template"
 	"net/http"
 	"sort"
-	"strings"
-	"time"
 
-	"github.com/gobuffalo/packr/v2"
 	"github.com/julienschmidt/httprouter"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/webutil"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 )
 
-// useUTC is used for showing dates to the user. On tests it should always use
-// UTC, but generally it should use the servers time zone. Using the servers
-// time zone is bad for generating golden files, because then the tests would
-// depend on the developers machine settings.
-var useUTC bool
+// The '*' below is needed to include files starting with '.' or '_'
+// Might change with Go 1.18 or later to `//go:embed all:templates`
+// https://github.com/golang/go/issues/42328#issuecomment-725579848
+
+//go:embed templates/*
+var templates embed.FS
 
 // Healthier is a simple interface, that can easily be implemented by all
 // critical services. It is used to indicate their health statuses.
@@ -66,6 +63,7 @@ type Server struct {
 	collectors collectors.Collectors
 
 	mainloop *MainLoop
+	renderer *webutil.TemplateRenderer
 }
 
 // Run starts the actual HTTP server.
@@ -114,56 +112,5 @@ func (s *Server) renderStatus(w http.ResponseWriter, r *http.Request, lists coll
 	data.CombinedInstances = instances.Select(collectors.HasEC2Data)
 	data.CombinedPods = pods
 
-	s.respondTemplate(w, r, "status.html", data)
-}
-
-func (s *Server) respondTemplate(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
-	templateBox := packr.New("templates", "./templates")
-
-	t := template.New("")
-
-	t = t.Funcs(template.FuncMap{
-		"StringTitle": strings.Title,
-		"PrettyTime": func(value interface{}) (string, error) {
-			tPtr, ok := value.(*time.Time)
-			if ok {
-				if tPtr == nil {
-					return "N/A", nil
-				}
-				value = *tPtr
-			}
-
-			t, ok := value.(time.Time)
-			if !ok {
-				return "", errors.Errorf("unexpected type")
-			}
-
-			if t.IsZero() {
-				return "N/A", nil
-			}
-
-			format := "Mon, 2 Jan 15:04:05"
-
-			if useUTC {
-				t = t.UTC()
-			} else {
-				t = t.Local()
-			}
-
-			return t.Format(format), nil
-		},
-	})
-
-	err := templateBox.Walk(func(name string, file packr.File) error {
-		var err error
-		t = t.New(name)
-		t, err = t.Parse(file.String())
-		return err
-	})
-	if webutil.RespondError(w, err) {
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html")
-	webutil.RespondError(w, t.ExecuteTemplate(w, name, data))
+	s.renderer.RespondHTML(w, r, "status.html", data)
 }

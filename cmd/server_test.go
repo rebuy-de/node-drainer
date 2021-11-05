@@ -6,17 +6,22 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path"
 	"testing"
 
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/testutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/webutil"
 	"github.com/stretchr/testify/require"
 
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors"
 )
 
 func init() {
-	useUTC = true
+	// Tests should always use UTC, because using the hosts time zone is bad
+	// for generating golden files, since the tests would depend on the
+	// developers' machine settings.
+	os.Setenv("TZ", "")
 }
 
 type testUnique map[string]struct{}
@@ -83,6 +88,7 @@ func TestServerRender(t *testing.T) {
 
 	t.Run("StatusPage", func(t *testing.T) {
 		server := new(Server)
+		server.renderer = webutil.NewTemplateRenderer(&templates)
 
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("GET", "/", nil)

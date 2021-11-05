@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/pkg/errors"
 
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
@@ -65,7 +64,7 @@ type Client interface {
 }
 
 type store struct {
-	api     *ec2.EC2
+	api     *ec2.Client
 	refresh time.Duration
 	cache   map[string]Instance
 	emitter *syncutil.SignalEmitter
@@ -75,9 +74,9 @@ type store struct {
 
 // New creates a new client for the EC2 API. It needs to be started with Run so
 // it actually reads messages. See Client interface for more information.
-func New(sess *session.Session, refresh time.Duration) Client {
+func New(conf *aws.Config, refresh time.Duration) Client {
 	return &store{
-		api:     ec2.New(sess),
+		api:     ec2.NewFromConfig(*conf),
 		refresh: refresh,
 		emitter: new(syncutil.SignalEmitter),
 	}
@@ -189,14 +188,14 @@ func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 	instances := map[string]Instance{}
 
 	for {
-		resp, err := s.api.DescribeInstances(params)
+		resp, err := s.api.DescribeInstances(ctx, params)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 
 		for _, reservation := range resp.Reservations {
 			for _, dto := range reservation.Instances {
-				id := aws.StringValue(dto.InstanceId)
+				id := aws.ToString(dto.InstanceId)
 
 				if id == "" {
 					// No idea how this could happend. If it happens anyways,
@@ -208,13 +207,13 @@ func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 
 				instance := Instance{
 					InstanceID:        id,
-					NodeName:          aws.StringValue(dto.PrivateDnsName),
-					State:             aws.StringValue(dto.State.Name),
-					InstanceType:      aws.StringValue(dto.InstanceType),
-					InstanceName:      ec2tag(dto, "Name"),
-					AvailabilityZone:  aws.StringValue(dto.Placement.AvailabilityZone),
-					InstanceLifecycle: aws.StringValue(dto.InstanceLifecycle),
-					LaunchTime:        aws.TimeValue(dto.LaunchTime),
+					NodeName:          aws.ToString(dto.PrivateDnsName),
+					State:             string(dto.State.Name),
+					InstanceType:      string(dto.InstanceType),
+					InstanceName:      ec2tag(&dto, "Name"),
+					AvailabilityZone:  aws.ToString(dto.Placement.AvailabilityZone),
+					InstanceLifecycle: string(dto.InstanceLifecycle),
+					LaunchTime:        aws.ToTime(dto.LaunchTime),
 				}
 
 				if instance.State == InstanceStateTerminated || instance.State == InstanceStateShuttingDown {
@@ -224,7 +223,7 @@ func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 					// is fine, since we use it only for displaying purposes.
 					// If we need a reliable value, we would need to get it
 					// from CloudTrail.
-					text := aws.StringValue(dto.StateTransitionReason)
+					text := aws.ToString(dto.StateTransitionReason)
 					text = strings.TrimPrefix(text, "User initiated")
 					text = strings.TrimPrefix(text, "Service initiated")
 					text = strings.TrimSpace(text)

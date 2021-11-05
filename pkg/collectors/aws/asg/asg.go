@@ -11,12 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/autoscaling"
-	"github.com/aws/aws-sdk-go/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"github.com/aws/smithy-go"
 	"github.com/pkg/errors"
 
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
@@ -86,8 +85,8 @@ type messageBody struct {
 }
 
 type handler struct {
-	asg     *autoscaling.AutoScaling
-	sqs     *sqs.SQS
+	asg     *autoscaling.Client
+	sqs     *sqs.Client
 	url     string
 	emitter *syncutil.SignalEmitter
 
@@ -99,9 +98,9 @@ type handler struct {
 // New creates a new client for ASG Lifecycle Hooks that are delivered via SQS.
 // It needs to be started with Run so it actually reads messages. See Client
 // interface for more information.
-func New(sess *session.Session, queueName string) (Client, error) {
-	sqsClient := sqs.New(sess)
-	out, err := sqsClient.GetQueueUrl(&sqs.GetQueueUrlInput{
+func New(ctx context.Context, conf *aws.Config, queueName string) (Client, error) {
+	sqsClient := sqs.NewFromConfig(*conf)
+	out, err := sqsClient.GetQueueUrl(ctx, &sqs.GetQueueUrlInput{
 		QueueName: &queueName,
 	})
 	if err != nil {
@@ -109,7 +108,7 @@ func New(sess *session.Session, queueName string) (Client, error) {
 	}
 
 	return &handler{
-		asg:     autoscaling.New(sess),
+		asg:     autoscaling.NewFromConfig(*conf),
 		sqs:     sqsClient,
 		url:     *out.QueueUrl,
 		cache:   map[string]*cacheValue{},
@@ -160,21 +159,17 @@ func (h *handler) Run(ctx context.Context) error {
 }
 
 func (h *handler) runOnce(ctx context.Context) error {
-	result, err := h.sqs.ReceiveMessageWithContext(ctx, &sqs.ReceiveMessageInput{
-		AttributeNames: []*string{
-			aws.String("All"),
-		},
-		MessageAttributeNames: []*string{
-			aws.String(sqs.QueueAttributeNameAll),
-		},
-		QueueUrl:            aws.String(h.url),
-		MaxNumberOfMessages: aws.Int64(10),
-		VisibilityTimeout:   aws.Int64(20),
-		WaitTimeSeconds:     aws.Int64(10),
+	result, err := h.sqs.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
+		AttributeNames:        []types.QueueAttributeName{types.QueueAttributeNameAll},
+		MessageAttributeNames: []string{"All"},
+		QueueUrl:              aws.String(h.url),
+		MaxNumberOfMessages:   10,
+		VisibilityTimeout:     20,
+		WaitTimeSeconds:       10,
 	})
 	if err != nil {
-		aerr, ok := err.(awserr.Error)
-		if ok && aerr.Code() == request.CanceledErrorCode {
+		var ce smithy.CanceledError
+		if errors.As(err, &ce) {
 			// This is a graceful shutdown, triggered by the context
 			// and not an actual error.
 			return nil
@@ -183,7 +178,7 @@ func (h *handler) runOnce(ctx context.Context) error {
 	}
 
 	for _, message := range result.Messages {
-		err := h.handle(ctx, message)
+		err := h.handle(ctx, &message)
 		if err != nil {
 			return errors.Wrap(err, "failed handle message")
 		}
@@ -192,20 +187,20 @@ func (h *handler) runOnce(ctx context.Context) error {
 	return nil
 }
 
-func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
+func (h *handler) handle(ctx context.Context, message *types.Message) error {
 	ctx = logutil.Start(ctx, "handle")
 	cacheItem := cacheValue{
-		MessageId:     aws.StringValue(message.MessageId),
-		ReceiptHandle: aws.StringValue(message.ReceiptHandle),
+		MessageId:     aws.ToString(message.MessageId),
+		ReceiptHandle: aws.ToString(message.ReceiptHandle),
 	}
 
 	ctx = logutil.WithFields(ctx, logutil.FromStruct(cacheItem))
 
 	logutil.Get(ctx).
-		WithField("message-body", aws.StringValue(message.Body)).
+		WithField("message-body", aws.ToString(message.Body)).
 		Debugf("got asg lifecycle message")
 
-	err := json.Unmarshal([]byte(aws.StringValue(message.Body)), &cacheItem.Body)
+	err := json.Unmarshal([]byte(aws.ToString(message.Body)), &cacheItem.Body)
 	if err != nil {
 		return errors.Wrap(err, "failed to decode message body")
 	}
@@ -214,7 +209,7 @@ func (h *handler) handle(ctx context.Context, message *sqs.Message) error {
 
 	if cacheItem.Body.Event == "autoscaling:TEST_NOTIFICATION" {
 		logutil.Get(ctx).Info("Skipping autoscaling:TEST_NOTIFICATION event")
-		h.sqs.DeleteMessage(&sqs.DeleteMessageInput{
+		h.sqs.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 			QueueUrl:      aws.String(h.url),
 			ReceiptHandle: aws.String(cacheItem.ReceiptHandle),
 		})
@@ -268,7 +263,7 @@ func (h *handler) Complete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	_, err := h.asg.CompleteLifecycleAction(&autoscaling.CompleteLifecycleActionInput{
+	_, err := h.asg.CompleteLifecycleAction(ctx, &autoscaling.CompleteLifecycleActionInput{
 		InstanceId:            &id,
 		AutoScalingGroupName:  &message.Body.AutoScalingGroupName,
 		LifecycleHookName:     &message.Body.LifecycleHookName,
@@ -308,7 +303,7 @@ func (h *handler) Delete(ctx context.Context, id string) error {
 		return nil
 	}
 
-	_, err := h.sqs.DeleteMessage(&sqs.DeleteMessageInput{
+	_, err := h.sqs.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(h.url),
 		ReceiptHandle: aws.String(cacheItem.ReceiptHandle),
 	})

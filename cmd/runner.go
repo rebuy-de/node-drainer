@@ -4,10 +4,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/pkg/errors"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/cmdutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/kubeutil"
+	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/vaultutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/webutil"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -18,7 +20,6 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/aws/spot"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/node"
 	"github.com/rebuy-de/node-drainer/v2/pkg/collectors/kube/pod"
-	"github.com/rebuy-de/node-drainer/v2/pkg/vaultutil"
 )
 
 type Runner struct {
@@ -52,8 +53,8 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	ctx = InitIntrumentation(ctx)
 
 	var (
-		awsSession *session.Session
-		err        error
+		awsConfig *aws.Config
+		err       error
 	)
 
 	if r.vault == (vaultutil.Params{
@@ -61,17 +62,16 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 		AWSRole:       cmdutil.Name,
 		AWSEnginePath: "aws",
 	}) {
-		// Fallback to generic AWS session generation, if no vault flag was provided.
-		awsSession, err = session.NewSessionWithOptions(session.Options{
-			SharedConfigState: session.SharedConfigEnable,
-			Profile:           r.awsProfile,
-		})
+		// Fallback to generic AWS config generation, if no vault flag was provided.
+		conf, err := config.LoadDefaultConfig(ctx,
+			config.WithSharedConfigProfile(r.awsProfile))
 		cmdutil.Must(err)
+		awsConfig = &conf
 	} else {
 		vault, err := vaultutil.Init(ctx, r.vault)
 		cmdutil.Must(err)
 
-		awsSession, err = vault.AWSSession()
+		awsConfig, err = vault.AWSConfig(ctx)
 		cmdutil.Must(err)
 	}
 
@@ -79,13 +79,13 @@ func (r *Runner) Run(ctx context.Context, cmd *cobra.Command, args []string) {
 	cmdutil.Must(err)
 
 	collectors := collectors.Collectors{
-		EC2:  ec2.New(awsSession, 1*time.Second),
-		Spot: spot.New(awsSession, 1*time.Second),
+		EC2:  ec2.New(awsConfig, 1*time.Second),
+		Spot: spot.New(awsConfig, 1*time.Second),
 		Node: node.New(kubeInterface),
 		Pod:  pod.New(kubeInterface),
 	}
 
-	collectors.ASG, err = asg.New(awsSession, r.sqsQueue)
+	collectors.ASG, err = asg.New(ctx, awsConfig, r.sqsQueue)
 	cmdutil.Must(err)
 
 	mainLoop := NewMainLoop(collectors)

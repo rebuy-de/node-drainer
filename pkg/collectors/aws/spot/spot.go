@@ -7,9 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/pkg/errors"
 
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
@@ -68,7 +67,7 @@ type Client interface {
 }
 
 type store struct {
-	api     *ec2.EC2
+	api     *ec2.Client
 	refresh time.Duration
 	cache   map[string]Instance
 	emitter *syncutil.SignalEmitter
@@ -78,9 +77,9 @@ type store struct {
 
 // New creates a new client for the EC2 API. It needs to be started with Run so
 // it actually reads messages. See Client interface for more information.
-func New(sess *session.Session, refresh time.Duration) Client {
+func New(conf *aws.Config, refresh time.Duration) Client {
 	return &store{
-		api:     ec2.New(sess),
+		api:     ec2.NewFromConfig(*conf),
 		refresh: refresh,
 		emitter: new(syncutil.SignalEmitter),
 	}
@@ -192,13 +191,13 @@ func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 	instances := map[string]Instance{}
 
 	for {
-		resp, err := s.api.DescribeSpotInstanceRequests(params)
+		resp, err := s.api.DescribeSpotInstanceRequests(ctx, params)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 
 		for _, dto := range resp.SpotInstanceRequests {
-			id := aws.StringValue(dto.InstanceId)
+			id := aws.ToString(dto.InstanceId)
 
 			if id == "" {
 				// No idea how this could happend. If it happens anyways,
@@ -210,14 +209,14 @@ func (s *store) fetchInstances(ctx context.Context) (map[string]Instance, error)
 
 			instance := Instance{
 				InstanceID: id,
-				RequestID:  aws.StringValue(dto.SpotInstanceRequestId),
-				CreateTime: aws.TimeValue(dto.CreateTime),
-				State:      aws.StringValue(dto.State),
+				RequestID:  aws.ToString(dto.SpotInstanceRequestId),
+				CreateTime: aws.ToTime(dto.CreateTime),
+				State:      string(dto.State),
 			}
 
 			if dto.Status != nil {
-				instance.StatusCode = aws.StringValue(dto.Status.Code)
-				instance.StatusUpdateTime = aws.TimeValue(dto.Status.UpdateTime)
+				instance.StatusCode = aws.ToString(dto.Status.Code)
+				instance.StatusUpdateTime = aws.ToTime(dto.Status.UpdateTime)
 			}
 
 			instances[id] = instance

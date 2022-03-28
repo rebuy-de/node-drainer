@@ -12,6 +12,7 @@ import (
 	"github.com/rebuy-de/node-drainer/v2/pkg/instutil"
 	_ "github.com/rebuy-de/rebuy-go-sdk/v3/pkg/instutil"
 	"github.com/rebuy-de/rebuy-go-sdk/v3/pkg/logutil"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -174,11 +175,15 @@ func InstMainLoopStarted(ctx context.Context, instances collectors.Instances, po
 		tci.Observe(instance.InstanceID, instance.EC2.State, logutil.FromStruct(instance))
 	}
 	for _, transition := range tci.Finish() {
+		unimmunePods := pods.
+			Select(collectors.PodOnInstance(transition.Name)).
+			Select(collectors.PodNotImmuneToEviction)
+
 		logger := logutil.Get(ctx).
-			WithField(
-				"ec2-state-transition",
-				fmt.Sprintf("%s -> %s", transition.From, transition.To),
-			).
+			WithFields(logrus.Fields{
+				"unimmune-pods":        strings.Join(unimmunePods.Names(), ", "),
+				"ec2-state-transition": fmt.Sprintf("%s -> %s", transition.From, transition.To),
+			}).
 			WithFields(transition.Fields)
 
 		if transition.From == "" || transition.To == "" {

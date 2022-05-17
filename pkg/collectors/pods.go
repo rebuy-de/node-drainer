@@ -64,3 +64,11 @@ func (pods Pods) Select(selector PodSelector) Pods {
 
 	return result
 }
+
+func (pods Pods) Names() []string {
+	result := []string{}
+	for _, p := range pods {
+		result = append(result, p.Name)
+	}
+	return result
+}

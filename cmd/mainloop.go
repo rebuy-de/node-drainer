@@ -155,7 +155,10 @@ func (l *MainLoop) runOnce(ctx context.Context) error {
 	for _, pod := range pods.Select(PodsReadyForEviction()) {
 		InstMainLoopEvictPod(ctx, pod)
 
-		l.collectors.Pod.Evict(ctx, &pod.Pod)
+		err := l.collectors.Pod.Evict(ctx, &pod.Pod)
+		if err != nil {
+			return errors.Wrap(err, "failed to evict pod")
+		}
 
 		l.triggerLoop.Emit()
 		return nil

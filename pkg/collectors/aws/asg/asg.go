@@ -168,7 +168,7 @@ func (h *handler) runOnce(ctx context.Context) error {
 		WaitTimeSeconds:       10,
 	})
 	if err != nil {
-		var ce smithy.CanceledError
+		var ce *smithy.CanceledError
 		if errors.As(err, &ce) {
 			// This is a graceful shutdown, triggered by the context
 			// and not an actual error.

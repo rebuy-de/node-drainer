@@ -1,0 +1,12 @@
+# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    ignore:
+      # ignores minor updates for k8s dependencies so it stays with out cluster version
+      - dependency-name: "k8s.io/*"
+        update-types: ["version-update:semver-minor"]
+    directory: "/"
+    schedule:
+      interval: "weekly"

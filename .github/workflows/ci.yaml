@@ -50,7 +50,8 @@ jobs:
       shell: bash
       run: |
         if [ "${GITHUB_EVENT_NAME}" == "pull_request" ]; then
-          echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:${GITHUB_HEAD_REF},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${GITHUB_HEAD_REF}"
+          BRANCH="$(echo ${GITHUB_HEAD_REF} | tr '/' '_')"
+          echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:${BRANCH},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${BRANCH}"
         else
           echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:master,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:master,\
             quay.io/rebuy/node-drainer:latest,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:latest"

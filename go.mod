@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.17.0
 	github.com/aws/aws-sdk-go-v2/config v1.17.8
 	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.23.17
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.63.1
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.63.2
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.19.10
 	github.com/aws/smithy-go v1.13.3
 	github.com/julienschmidt/httprouter v1.3.0
@@ -40,7 +40,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.18 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.24 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.4.0 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.17 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.18 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.8.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.17.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.11.23 // indirect

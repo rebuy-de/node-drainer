@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.23.17
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.63.2
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.19.11
-	github.com/aws/smithy-go v1.13.3
+	github.com/aws/smithy-go v1.13.4
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0

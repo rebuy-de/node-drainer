@@ -43,14 +43,15 @@ jobs:
           echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:master,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:master,\
             quay.io/rebuy/node-drainer:latest,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:latest"
         fi
+        ls -la
+        ls -la dist
       id: generate_tags
 
-    - name: Set up QEMU
-      if: ${{ github.event_name == 'release' }}
-      id: qemu
-      uses: docker/setup-qemu-action@v2
-      with:
-        platforms: arm64
+    # - name: Set up QEMU
+    #   id: qemu
+    #   uses: docker/setup-qemu-action@v2
+    #   with:
+    #     platforms: arm64
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2

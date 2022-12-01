@@ -28,28 +28,22 @@ jobs:
       with:
         fetch-depth: 0
     - name: Build Project
-      env:
-        CGO_ENABLED: "0"
       run: ./buildutil -x linux/amd64 -x linux/arm64 -v
 
-    - name: Generate image tags for releaes
-      if: ${{ github.event_name == 'release' }}
-      shell: bash
-      run: echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:${GITHUB_REF#refs/tags/},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${GITHUB_REF#refs/tags/}"
-      id: generate_tags_release
-
-    - name: Generate image tags for PRs
+    - name: Generate image tags
       if: ${{ github.event_name != 'release' }}
       shell: bash
       run: |
         if [ "${GITHUB_EVENT_NAME}" == "pull_request" ]; then
           BRANCH="$(echo ${GITHUB_HEAD_REF} | tr '/' '_')"
           echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:${BRANCH},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${BRANCH}"
+        elif [ "${GITHUB_EVENT_NAME}" == "release" ]; then
+          echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:${GITHUB_REF#refs/tags/},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${GITHUB_REF#refs/tags/}"
         else
           echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:master,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:master,\
             quay.io/rebuy/node-drainer:latest,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:latest"
         fi
-      id: generate_tags_pr
+      id: generate_tags
 
     - name: Set up QEMU
       if: ${{ github.event_name == 'release' }}
@@ -89,6 +83,6 @@ jobs:
       with:
         context: .
         push: true
-        dockerfile: Dockerfile.multi
-        tags: ${{ steps.generate_tags_release.outputs.tags }}
+        file: Dockerfile.multi
+        tags: ${{ steps.generate_tags.outputs.tags }}
         platforms: linux/amd64,linux/arm64

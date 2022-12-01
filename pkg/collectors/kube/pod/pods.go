@@ -94,7 +94,8 @@ func (c *client) Healthy() bool {
 	return c.pods.Informer().HasSynced() &&
 		c.rs.Informer().HasSynced() &&
 		c.sts.Informer().HasSynced() &&
-		c.deploy.Informer().HasSynced()
+		c.deploy.Informer().HasSynced() &&
+		c.pdb.Informer().HasSynced()
 }
 
 func (c *client) SignalEmitter() *syncutil.SignalEmitter {
@@ -173,6 +174,7 @@ func (c *client) Run(ctx context.Context) error {
 	run("ReplicaSets", c.rs.Informer())
 	run("StatefulSets", c.sts.Informer())
 	run("Deployments", c.deploy.Informer())
+	run("PodDisruptionBudgets", c.pdb.Informer())
 
 	return errors.WithStack(egrp.Wait())
 }

@@ -39,15 +39,15 @@ func (c *client) getPDP(ctx context.Context, pod *v1.Pod) PDPReadyReason {
 		return or
 	}
 
-	pdps, err := c.pdb.Lister().List(labels.Everything())
+	pdbs, err := c.pdb.Lister().List(labels.Everything())
 	if err != nil {
 		return fnerr(err, "PDBGetError")
 	}
 
 	matches := 0
 
-	for _, pdp := range pdps {
-		selector, err := meta_v1.LabelSelectorAsSelector(pdp.Spec.Selector)
+	for _, pdb := range pdbs {
+		selector, err := meta_v1.LabelSelectorAsSelector(pdb.Spec.Selector)
 		if err != nil {
 			return fnerr(err, "PDBGetSelector")
 		}
@@ -58,12 +58,12 @@ func (c *client) getPDP(ctx context.Context, pod *v1.Pod) PDPReadyReason {
 
 		matches++
 
-		if pdp.Status.DisruptionsAllowed == 0 {
+		if pdb.Status.DisruptionsAllowed == 0 {
 			return PDPReadyReason{
 				CanDecrement: false,
 				Short:        "NoDisruptionsAllowed",
 				Reason: fmt.Sprintf("%d Pods ready, but must have at least %d",
-					pdp.Status.CurrentHealthy, pdp.Status.DesiredHealthy),
+					pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy),
 			}
 		}
 	}

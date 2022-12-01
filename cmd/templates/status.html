@@ -57,7 +57,7 @@
               <th>Instance ID</th>
               <th>Node Name</th>
               <th>Pod Name</th>
-              <th>Can Decement</th>
+              <th colspan="2">Can Decement</th>
               <th>Properties</th>
             </tr>
           </thead>
@@ -74,6 +74,13 @@
                     <span class="badge badge-success" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
                   {{ else }}
                     <span class="badge badge-danger" title="{{ .OwnerReady.Reason }}">{{ .OwnerReady.Short }}</span>
+                  {{ end }}
+                </td>
+                <td>
+                  {{ if .PDPReady.CanDecrement }}
+                    <span class="badge badge-success" title="{{ .PDPReady.Reason }}">{{ .PDPReady.Short }}</span>
+                  {{ else }}
+                    <span class="badge badge-danger" title="{{ .PDPReady.Reason }}">{{ .PDPReady.Short }}</span>
                   {{ end }}
                 </td>
                 <td>

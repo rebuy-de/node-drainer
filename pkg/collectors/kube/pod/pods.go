@@ -17,6 +17,7 @@ import (
 	"k8s.io/client-go/informers"
 	apps_informers "k8s.io/client-go/informers/apps/v1"
 	core_informers "k8s.io/client-go/informers/core/v1"
+	policy_informers "k8s.io/client-go/informers/policy/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -34,6 +35,7 @@ type Pod struct {
 	OwnerKind   string           `logfield:"pod-owner-kind"`
 	OwnerName   string           `logfield:"pod-owner-name"`
 	OwnerReady  OwnerReadyReason `logfield:",squash"`
+	PDPReady    PDPReadyReason   `logfield:",squash"`
 	CreatedTime time.Time        `logfield:"pod-created-time"`
 }
 
@@ -73,6 +75,7 @@ type client struct {
 	rs     apps_informers.ReplicaSetInformer
 	sts    apps_informers.StatefulSetInformer
 	deploy apps_informers.DeploymentInformer
+	pdb    policy_informers.PodDisruptionBudgetInformer
 }
 
 func New(kube kubernetes.Interface) Client {
@@ -83,6 +86,7 @@ func New(kube kubernetes.Interface) Client {
 		rs:     informers.NewSharedInformerFactory(kube, 5*time.Second).Apps().V1().ReplicaSets(),
 		sts:    informers.NewSharedInformerFactory(kube, 5*time.Second).Apps().V1().StatefulSets(),
 		deploy: informers.NewSharedInformerFactory(kube, 5*time.Second).Apps().V1().Deployments(),
+		pdb:    informers.NewSharedInformerFactory(kube, 5*time.Second).Policy().V1().PodDisruptionBudgets(),
 	}
 }
 
@@ -132,6 +136,8 @@ func (c *client) List(ctx context.Context) []Pod {
 			pod.OwnerKind = owner.Kind
 			pod.OwnerName = owner.Name
 		}
+
+		pod.PDPReady = c.getPDP(ctx, obj)
 
 		result = append(result, pod)
 	}

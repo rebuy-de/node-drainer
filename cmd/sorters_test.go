@@ -194,6 +194,9 @@ func TestPodSelectors(t *testing.T) {
 			OwnerReady: pod.OwnerReadyReason{
 				CanDecrement: true,
 			},
+			PDBReady: pod.PDBReadyReason{
+				CanDecrement: true,
+			},
 		}
 		podCannotDecrement = pod.Pod{
 			Name:      "foobar",

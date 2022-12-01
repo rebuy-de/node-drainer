@@ -8,7 +8,9 @@ func PodImmuneToEviction(p *Pod) bool { return p.Pod.ImmuneToEviction() }
 
 func PodNotImmuneToEviction(p *Pod) bool { return !p.Pod.ImmuneToEviction() }
 
-func PodCanDecrement(p *Pod) bool { return p.Pod.OwnerReady.CanDecrement }
+func PodCanDecrement(p *Pod) bool {
+	return p.Pod.OwnerReady.CanDecrement && p.Pod.PDBReady.CanDecrement
+}
 
 func PodOnInstance(instanceID string) PodSelector {
 	return func(p *Pod) bool {

@@ -23,6 +23,7 @@ jobs:
     - name: Build project
       shell: bash
       run: |
+        id
         docker run --rm \
           -e CGO_ENABLED=0 \
           -v $(pwd):/project \

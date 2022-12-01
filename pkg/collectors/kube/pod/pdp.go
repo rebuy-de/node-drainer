@@ -11,23 +11,23 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-type PDPReadyReason struct {
+type PDBReadyReason struct {
 	CanDecrement bool   `logfield:"pdp-owner-ready-can-decrement"`
 	Short        string `logfield:"pdp-owner-ready-short"`
 	Reason       string `logfield:"-"`
 }
 
-func (c *client) getPDP(ctx context.Context, pod *v1.Pod) PDPReadyReason {
+func (c *client) getPDP(ctx context.Context, pod *v1.Pod) PDBReadyReason {
 	if pod.ObjectMeta.DeletionTimestamp != nil {
-		return PDPReadyReason{
+		return PDBReadyReason{
 			CanDecrement: false,
 			Short:        "AlreadyTerminating",
 			Reason:       "Pod is already in termination process.",
 		}
 	}
 
-	fnerr := func(err error, short string) PDPReadyReason {
-		or := PDPReadyReason{
+	fnerr := func(err error, short string) PDBReadyReason {
+		or := PDBReadyReason{
 			CanDecrement: false,
 			Short:        short,
 			Reason:       fmt.Sprintf("%v", err),
@@ -59,7 +59,7 @@ func (c *client) getPDP(ctx context.Context, pod *v1.Pod) PDPReadyReason {
 		matches++
 
 		if pdb.Status.DisruptionsAllowed == 0 {
-			return PDPReadyReason{
+			return PDBReadyReason{
 				CanDecrement: false,
 				Short:        "NoDisruptionsAllowed",
 				Reason: fmt.Sprintf("%d Pods ready, but must have at least %d",
@@ -69,14 +69,14 @@ func (c *client) getPDP(ctx context.Context, pod *v1.Pod) PDPReadyReason {
 	}
 
 	if matches > 0 {
-		return PDPReadyReason{
+		return PDBReadyReason{
 			CanDecrement: true,
 			Short:        "PDBOK",
 			Reason:       fmt.Sprintf("All %d matching PDBs allow disruptions.", matches),
 		}
 	}
 
-	return PDPReadyReason{
+	return PDBReadyReason{
 		CanDecrement: true,
 		Short:        "NoPDB",
 		Reason:       "No PDB found for this pod.",

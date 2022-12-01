@@ -35,7 +35,7 @@ type Pod struct {
 	OwnerKind   string           `logfield:"pod-owner-kind"`
 	OwnerName   string           `logfield:"pod-owner-name"`
 	OwnerReady  OwnerReadyReason `logfield:",squash"`
-	PDPReady    PDPReadyReason   `logfield:",squash"`
+	PDBReady    PDBReadyReason   `logfield:",squash"`
 	CreatedTime time.Time        `logfield:"pod-created-time"`
 }
 
@@ -138,7 +138,7 @@ func (c *client) List(ctx context.Context) []Pod {
 			pod.OwnerName = owner.Name
 		}
 
-		pod.PDPReady = c.getPDP(ctx, obj)
+		pod.PDBReady = c.getPDP(ctx, obj)
 
 		result = append(result, pod)
 	}

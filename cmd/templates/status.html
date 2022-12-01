@@ -77,10 +77,10 @@
                   {{ end }}
                 </td>
                 <td>
-                  {{ if .PDPReady.CanDecrement }}
-                    <span class="badge badge-success" title="{{ .PDPReady.Reason }}">{{ .PDPReady.Short }}</span>
+                  {{ if .PDBReady.CanDecrement }}
+                    <span class="badge badge-success" title="{{ .PDBReady.Reason }}">{{ .PDBReady.Short }}</span>
                   {{ else }}
-                    <span class="badge badge-danger" title="{{ .PDPReady.Reason }}">{{ .PDPReady.Short }}</span>
+                    <span class="badge badge-danger" title="{{ .PDBReady.Reason }}">{{ .PDBReady.Short }}</span>
                   {{ end }}
                 </td>
                 <td>

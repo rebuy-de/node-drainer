@@ -1,0 +1,5 @@
+FROM alpine:latest
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates && adduser -D node-drainer
+COPY dist/node-drainer-linux-${TARGETARCH} /usr/local/bin/
+USER node-drainer

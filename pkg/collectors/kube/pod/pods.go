@@ -186,7 +186,10 @@ func (c *client) Evict(ctx context.Context, pod *Pod) error {
 
 	// Do an additional sanity check of CanDecrement. Just to be sure.
 	if !pod.OwnerReady.CanDecrement {
-		return errors.Errorf("cannot delete nil pod")
+		return errors.Errorf("pod owner does not allow decrement")
+	}
+	if !pod.PDBReady.CanDecrement {
+		return errors.Errorf("pdb does not allow decrement")
 	}
 
 	if pod.Namespace == "" {

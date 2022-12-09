@@ -1,6 +1,6 @@
 # node-drainer
 
-[![Build Status](https://travis-ci.org/rebuy-de/node-drainer.svg?branch=master)](https://travis-ci.org/rebuy-de/node-drainer)
+![Build Status](https://github.com/rebuy-de/node-drainer/workflows/Golang/badge.svg?branch=main)
 [![license](https://img.shields.io/github/license/rebuy-de/node-drainer.svg)]()
 
 Utilise the power of AWS Auto Scaling group (ASG) lifecycle hooks and drain your Kubernetes nodes gracefully.
@@ -48,8 +48,8 @@ node-drainer --access-key-id example_id --secret-access-key example_secret --reg
 ## Installation
 
 * Binaries for *node-drainer* are provided for each release [here](https://github.com/rebuy-de/node-drainer/releases).
-* Docker containers are are provided [here](https://quay.io/repository/rebuy/node-drainer). To obtain the latest docker image run `docker pull quay.io/rebuy/node-drainer:master`.
-* For deploying *node-drainer* docker image to your Kubernetes cluster you can use the sample manifest files (found [here](https://github.com/rebuy-de/node-drainer/tree/master/samples)), just remember to fill in your own AWS credentials. I you use RBAC in Kubernetes you can also take advantage of the sample service account configuration.
+* Docker containers are are provided [here](https://quay.io/repository/rebuy/node-drainer). To obtain the latest docker image run `docker pull quay.io/rebuy/node-drainer:main`.
+* For deploying *node-drainer* docker image to your Kubernetes cluster you can use the sample manifest files (found [here](https://github.com/rebuy-de/node-drainer/tree/main/samples)), just remember to fill in your own AWS credentials. I you use RBAC in Kubernetes you can also take advantage of the sample service account configuration.
 
 To compile *node-drainer* from source you need a working
 [Golang](https://golang.org/doc/install) development environment. The sources

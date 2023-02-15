@@ -42,7 +42,7 @@ jobs:
     - name: Generate image tags for releaes
       if: ${{ github.event_name == 'release' }}
       shell: bash
-      run: echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:${GITHUB_REF#refs/tags/},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${GITHUB_REF#refs/tags/}"
+      run: echo "tags=quay.io/rebuy/node-drainer:${GITHUB_REF#refs/tags/},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
       id: generate_tags_release
 
     - name: Generate image tags for PRs
@@ -51,10 +51,10 @@ jobs:
       run: |
         if [ "${GITHUB_EVENT_NAME}" == "pull_request" ]; then
           BRANCH="$(echo ${GITHUB_HEAD_REF} | tr '/' '_')"
-          echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:${BRANCH},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${BRANCH}"
+          echo "tags=quay.io/rebuy/node-drainer:${BRANCH},074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:${BRANCH}" >> $GITHUB_OUTPUT
         else
-          echo "##[set-output name=tags;]quay.io/rebuy/node-drainer:main,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:main,\
-            quay.io/rebuy/node-drainer:latest,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:latest"
+          echo "tags=quay.io/rebuy/node-drainer:main,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:main,\
+            quay.io/rebuy/node-drainer:latest,074509403805.dkr.ecr.eu-west-1.amazonaws.com/node-drainer:latest" >> $GITHUB_OUTPUT
         fi
       id: generate_tags_pr
 

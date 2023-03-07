@@ -17,9 +17,9 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/sync v0.1.0
-	k8s.io/api v0.24.10
-	k8s.io/apimachinery v0.24.10
-	k8s.io/client-go v0.24.10
+	k8s.io/api v0.24.11
+	k8s.io/apimachinery v0.24.11
+	k8s.io/client-go v0.24.11
 )
 
 require (

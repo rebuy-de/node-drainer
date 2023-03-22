@@ -10,7 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	policy "k8s.io/api/policy/v1beta1"
+	policy "k8s.io/api/policy/v1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/runtime"
@@ -200,7 +200,7 @@ func (c *client) Evict(ctx context.Context, pod *Pod) error {
 		return errors.Errorf("missing name")
 	}
 
-	err := c.kube.CoreV1().Pods(pod.Namespace).Evict(ctx, &policy.Eviction{
+	err := c.kube.CoreV1().Pods(pod.Namespace).EvictV1(ctx, &policy.Eviction{
 		ObjectMeta: meta.ObjectMeta{
 			Name:      pod.Name,
 			Namespace: pod.Namespace,

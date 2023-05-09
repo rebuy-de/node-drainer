@@ -11,7 +11,7 @@ require (
 	github.com/aws/smithy-go v1.13.5
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.15.0
+	github.com/prometheus/client_golang v1.15.1
 	github.com/rebuy-de/rebuy-go-sdk/v3 v3.12.0
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.7.0

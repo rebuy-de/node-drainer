@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/aws/aws-sdk-go-v2 v1.18.0
 	github.com/aws/aws-sdk-go-v2/config v1.18.22
-	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.28.6
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.28.7
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.95.0
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.20.9
 	github.com/aws/smithy-go v1.13.5

@@ -4,9 +4,12 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     ignore:
-      # ignores minor updates for k8s dependencies so it stays with out cluster version
-      - dependency-name: "k8s.io/*"
+      # ignores minor updates for k8s dependencies so it stays with our cluster version
+      - dependency-name: "k8s.io/client-go"
         update-types: ["version-update:semver-minor"]
+      # dependabot has conflict issues with the other k8s dependencies, so we update only client-go
+      - dependency-name: "k8s.io/apimachinery"
+      - dependency-name: "k8s.io/api"
     directory: "/"
     schedule:
       interval: "weekly"

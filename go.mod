@@ -15,7 +15,7 @@ require (
 	github.com/rebuy-de/rebuy-go-sdk/v3 v3.12.0
 	github.com/sirupsen/logrus v1.9.2
 	github.com/spf13/cobra v1.7.0
-	github.com/stretchr/testify v1.8.2
+	github.com/stretchr/testify v1.8.3
 	golang.org/x/sync v0.2.0
 	k8s.io/api v0.25.10
 	k8s.io/apimachinery v0.25.10

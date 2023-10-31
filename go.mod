@@ -4,9 +4,9 @@ go 1.21
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.21.2
-	github.com/aws/aws-sdk-go-v2/config v1.19.0
-	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.31.0
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.126.0
+	github.com/aws/aws-sdk-go-v2/config v1.19.1
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.32.0
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.128.0
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.24.7
 	github.com/aws/smithy-go v1.15.0
 	github.com/julienschmidt/httprouter v1.3.0

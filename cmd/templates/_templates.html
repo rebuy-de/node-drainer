@@ -1,7 +1,7 @@
 {{ define "pretty_node_taints" }}
   {{ range .}}
-    {{ if eq .Key "node-role.kubernetes.io/master" }}
-      <span title="{{ .ToString }}" class="badge badge-info">Master</span>
+    {{ if or (eq .Key "node-role.kubernetes.io/master") (eq .Key "node-role.kubernetes.io/control-plane") }}
+      <span title="{{ .ToString }}" class="badge badge-info">Control Plane</span>
     {{ else if eq .Key "node.kubernetes.io/unschedulable" }}
       <span title="{{ .ToString }}" class="badge badge-warning">Unschedulable</span>
     {{ else if eq .Key "DeletionCandidateOfClusterAutoscaler" }}

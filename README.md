@@ -8,14 +8,11 @@ Utilise the power of AWS Auto Scaling group (ASG) lifecycle hooks and drain your
 For each item received it contacts Kubernetes, taints the node to be shut down and evicts any pods not tolerant to the taint.
 Meant to be run in side Kubernetes with a single replica only.
 
-> **Development Status** *node-drainer* is designed for internal use only.
-> Expect breaking changes any time, but if you experience any issue, feel free
-> to open an issue anyway.
->
-> :fire: Consider using the [AWS Node Termination
+> **Development Status** *node-drainer* was designed for internal use only.
+> After migrating to AWS EKS we started to use the [Node Termination
 > Handler](https://github.com/aws/aws-node-termination-handler), which is the
-> official tool from AWS. It has better support and we will probably migrate
-> to it ourselves, if we experience a bigger roadblock with node-drainer.
+> official tool from AWS. Development for *node-drainer* was therefore stopped,
+> but feel free to fork and continuing its legacy!
 
 ## Use cases
 *node-drainer* is useful whenever any of the Kubernetes worker nodes running in AWS must be shut down. Graceful eviction of Kubernetes pods from terminated nodes ensures continuous operation of services when:
